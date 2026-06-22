@@ -2574,7 +2574,7 @@ a {
 
 .lot-detail-field {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 112px minmax(0, 1fr);
   border: 1px solid #edf1f4;
   font-size: 14px;
 }
@@ -2584,6 +2584,7 @@ a {
   background: #f6f8fa;
   color: #4d5d6a;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .lot-detail-field span {
