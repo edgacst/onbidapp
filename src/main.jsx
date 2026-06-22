@@ -1251,13 +1251,20 @@ function BoardCommentSection({
   );
 }
 
+function readInitialRoute() {
+  return parseAppHash(window.location.hash);
+}
+
 function App() {
-  const [view, setView] = useState("home");
+  const initialRoute = readInitialRoute();
+  const [view, setView] = useState(initialRoute.view);
   const [statusFocus, setStatusFocus] = useState("");
   const [checkMode, setCheckMode] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [quickKeyword, setQuickKeyword] = useState("");
-  const [homeAssetType, setHomeAssetType] = useState("realty");
+  const [homeAssetType, setHomeAssetType] = useState(
+    initialRoute.selectedId ? assetTypeFromLotId(initialRoute.selectedId) : "realty",
+  );
   const [homeDisposition, setHomeDisposition] = useState("all");
   const [homeUsage, setHomeUsage] = useState("");
   const [dspsMethod, setDspsMethod] = useState("");
@@ -1270,7 +1277,7 @@ function App() {
   const [pageNo, setPageNo] = useState(1);
   const [data, setData] = useState({ lots: sampleLots, totalCount: sampleLots.length, sample: true });
   const [statusTotals, setStatusTotals] = useState({});
-  const [selectedId, setSelectedId] = useState(sampleLots[0].id);
+  const [selectedId, setSelectedId] = useState(initialRoute.selectedId || sampleLots[0].id);
   const [saved, setSaved] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("onbidSavedLots") || "[]");
@@ -1610,10 +1617,14 @@ function App() {
     };
     loadLots(initialFilters);
 
-    function applyRouteFromLocation(state = window.history.state || {}) {
+    function applyRouteFromLocation(state = {}, preferHash = false) {
       const parsed = parseAppHash(window.location.hash);
-      const nextView = state.appView || parsed.view || "home";
-      const nextSelectedId = state.selectedId || parsed.selectedId || "";
+      const nextView = preferHash
+        ? (parsed.view || state.appView || "home")
+        : (state.appView || parsed.view || "home");
+      const nextSelectedId = preferHash
+        ? (parsed.selectedId || state.selectedId || "")
+        : (state.selectedId || parsed.selectedId || "");
       setView(nextView);
       if (nextSelectedId) setSelectedId(nextSelectedId);
       if ((nextView || "home") !== "search") {
@@ -1623,11 +1634,11 @@ function App() {
     }
 
     function handlePopState(event) {
-      applyRouteFromLocation(event.state || {});
+      applyRouteFromLocation(event.state || {}, false);
     }
 
     function handleHashChange() {
-      applyRouteFromLocation(window.history.state || {});
+      applyRouteFromLocation(window.history.state || {}, true);
     }
 
     window.addEventListener("popstate", handlePopState);
