@@ -1130,11 +1130,6 @@ function LotDetailPanel({
                   <span>{lot.failedCount ?? 0}회</span>
                 </div>
               </div>
-              {capabilityTags.length > 0 && (
-                <div className="lot-detail-meta-footer">
-                  {capabilityTags.map((tag) => <span key={tag} className="lot-detail-chip blue">{tag}</span>)}
-                </div>
-              )}
             </>
           )}
 
