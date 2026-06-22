@@ -427,20 +427,6 @@ function onbidDetailUrl(lot) {
   return `https://www.onbid.co.kr/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do?${query.toString()}`;
 }
 
-function onbidDetailEmbedUrl(lot) {
-  if (!lot?.onbidNo || !lot?.conditionNo || !lot?.pbctNo) return "";
-  const screen = onbidDetailScreen(lot);
-  const query = new URLSearchParams({
-    cltrPrptDivCd: screen.cltrPrptDivCd,
-    cltrScrnGrpCd: screen.cltrScrnGrpCd,
-    onbidCltrno: String(lot.onbidNo),
-    pbctCdtnNo: String(lot.conditionNo),
-    pbctNo: String(lot.pbctNo),
-  });
-  if (lot.noticeNo) query.set("onbidPbancNo", String(lot.noticeNo));
-  return `/onbid-embed/detail?${query.toString()}`;
-}
-
 function assetTypeFromLotId(id) {
   const text = String(id || "");
   if (/-0500-/.test(text)) return "car";
@@ -667,40 +653,6 @@ function AuctionImage({ src, fallbackSrc = "", alt, className = "", showEmptyLab
       referrerPolicy="no-referrer"
       onError={() => setSourceIndex((index) => index + 1)}
     />
-  );
-}
-
-function OnbidDetailEmbed({ lot }) {
-  const embedUrl = onbidDetailEmbedUrl(lot);
-  if (!embedUrl) {
-    return (
-      <section className="onbid-detail-embed">
-        <div className="onbid-detail-embed-head">
-          <strong>온비드 공고 원문</strong>
-        </div>
-        <p className="muted">물건 식별 정보가 부족해 온비드 상세를 불러오지 못했습니다.</p>
-        <a className="secondary-action" href={onbidSearchUrl(lot)} target="_blank" rel="noreferrer">
-          온비드에서 검색 <ExternalLink size={14} />
-        </a>
-      </section>
-    );
-  }
-
-  return (
-    <section className="onbid-detail-embed">
-      <div className="onbid-detail-embed-head">
-        <strong>온비드 공고 원문</strong>
-        <a href={onbidDetailUrl(lot)} target="_blank" rel="noreferrer">
-          새 창에서 보기 <ExternalLink size={14} />
-        </a>
-      </div>
-      <iframe
-        title={`${lot.title} 온비드 상세`}
-        src={embedUrl}
-        loading="lazy"
-        referrerPolicy="no-referrer"
-      />
-    </section>
   );
 }
 
@@ -2510,7 +2462,18 @@ function App() {
                 </div>
               </div>
 
-              <OnbidDetailEmbed lot={selected} />
+              <div className="analysis-box">
+                <strong>상세 정보</strong>
+                {detailLoading && <p>물건상세 조회 중입니다.</p>}
+                {detailError && <p>상세 API 권한이 없어 목록 데이터 기준으로 표시 중입니다. 자세한 내용은 온비드 원문에서 확인하세요.</p>}
+                {!detailLoading && !detailError && detail && (
+                  <div className="detail-extra">
+                    <span>사진 {displayPhotos.length}건</span>
+                    <span>감정평가 {detail.appraisals.length}건</span>
+                    <span>면적상세 {detail.areas.length}건</span>
+                  </div>
+                )}
+              </div>
 
               <div className="action-row">
                 <a className="secondary-action" href={onbidDetailUrl(selected)} target="_blank" rel="noreferrer">온비드 상세 보기 <ExternalLink size={16} /></a>
@@ -2735,7 +2698,18 @@ function App() {
                 </div>
               </div>
 
-              <OnbidDetailEmbed lot={selected} />
+              <div className="analysis-box">
+                <strong>상세 정보</strong>
+                {detailLoading && <p>물건상세 조회 중입니다.</p>}
+                {detailError && <p>상세 API 권한이 없어 목록 데이터 기준으로 표시 중입니다. 자세한 내용은 온비드 원문에서 확인하세요.</p>}
+                {!detailLoading && !detailError && detail && (
+                  <div className="detail-extra">
+                    <span>사진 {displayPhotos.length}건</span>
+                    <span>감정평가 {detail.appraisals.length}건</span>
+                    <span>면적상세 {detail.areas.length}건</span>
+                  </div>
+                )}
+              </div>
 
               <div className="action-row">
                 <a className="secondary-action" href={onbidDetailUrl(selected)} target="_blank" rel="noreferrer">온비드 상세 보기 <ExternalLink size={16} /></a>

@@ -2230,41 +2230,6 @@ a {
   text-align: right;
 }
 
-.onbid-detail-embed {
-  margin: 16px 0;
-  display: grid;
-  gap: 10px;
-}
-
-.onbid-detail-embed-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.onbid-detail-embed-head strong {
-  font-size: 16px;
-}
-
-.onbid-detail-embed-head a {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: #5a56e8;
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.onbid-detail-embed iframe {
-  width: 100%;
-  min-height: 2800px;
-  border: 1px solid #dfe6eb;
-  border-radius: 8px;
-  background: #fff;
-}
-
 .photo-empty {
   grid-column: 1 / -1;
   display: grid;
