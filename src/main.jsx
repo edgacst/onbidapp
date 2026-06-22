@@ -394,6 +394,32 @@ function buildAddress(lot) {
   return lot.address || lot.title || [lot.region, lot.category].filter(Boolean).join(" ");
 }
 
+function pickFullLotAddress(lot, detailItem = {}) {
+  const raw = lot?.raw || {};
+  const regionLine = [
+    raw.lctnSdnm || raw.lctnSidoNm,
+    raw.lctnSggnm,
+    raw.lctnEmdNm,
+    raw.lctnDtlNm,
+  ].filter(Boolean).join(" ");
+
+  const candidates = [
+    detailItem.cltrRadr,
+    detailItem.onbidCltrNm,
+    detailItem.cltrNm,
+    raw.cltrRadr,
+    raw.onbidCltrNm,
+    lot?.title,
+    lot?.address,
+    regionLine,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  if (!candidates.length) return "소재지 확인";
+  return candidates.reduce((best, current) => (current.length > best.length ? current : best), candidates[0]);
+}
+
 function mapLinks(lot) {
   const query = encodeURIComponent(buildAddress(lot));
   return {
@@ -835,8 +861,8 @@ function LotDetailPanel({
   const areaRows = buildAreaRows(lot, detail);
   const capabilityTags = lotCapabilityTags(lot);
   const restrictionTags = bidRestrictionTags(lot);
-  const roadAddress = lot.roadAddress || detailItem.rdnmAdrs || raw.rdnmAdrs || "-";
-  const lotAddress = lot.address || lot.title;
+  const roadAddress = lot.roadAddress || detailItem.rdnmAdrs || raw.rdnmAdrs || raw.roadNmRadr || "-";
+  const lotAddress = pickFullLotAddress(lot, detailItem);
   const isSeized = /압류/.test(propertyTag);
   const statusLabel = statusGroup(lot) === "ready" ? "입찰시작 전" : lot.status;
   const deptLine = [raw.chrgDeptNm || raw.dpslDeptNm, raw.chrgTelno || raw.telNo].filter(Boolean).join(" / ");
@@ -1165,7 +1191,12 @@ function normalizeItems(payload, assetType = "realty") {
       : appraised && minimum
         ? Math.max(0, Math.round((1 - minimum / appraised) * 100))
         : 0;
-    const address = item.cltrRadr || [item.lctnSdnm || item.lctnSidoNm, item.lctnSggnm, item.lctnEmdNm].filter(Boolean).join(" ");
+    const regionLine = [item.lctnSdnm || item.lctnSidoNm, item.lctnSggnm, item.lctnEmdNm].filter(Boolean).join(" ");
+    const title = String(item.onbidCltrNm || "온비드 부동산 물건").trim();
+    const address = [title, item.cltrRadr, regionLine]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)[0] || "소재지 확인";
 
     return {
       id: item.cltrMngNo || `onbid-${index}`,
@@ -1175,7 +1206,7 @@ function normalizeItems(payload, assetType = "realty") {
       noticeNo: item.onbidPbancNo || "",
       pbctNo: item.pbctNo || "",
       round: item.pbctNsq || item.pbctSeq || "",
-      title: String(item.onbidCltrNm || "온비드 부동산 물건").trim(),
+      title,
       category: item.cltrUsgMclsCtgrNm || item.cltrUsgLclsCtgrNm || "부동산",
       subCategory: item.cltrUsgSclsCtgrNm || "",
       agency: item.orgNm || item.rqstOrgNm || "기관 확인",
@@ -1224,7 +1255,12 @@ function normalizeResultItems(payload, assetType = "realty") {
     const appraised = parseMoney(item.apslEvlAmt ?? item.apslPrc ?? item.frstBidPrc);
     const minimum = parseMoney(item.lowstBidPrc ?? item.lowstBidPrcIndctCont ?? item.sfbidPrc);
     const soldAmount = parseMoney(item.scfbAmt ?? item.scsbidAmt ?? item.bidPrc);
-    const address = item.cltrRadr || item.addr || [item.lctnSdnm || item.lctnSidoNm, item.lctnSggnm, item.lctnEmdNm].filter(Boolean).join(" ");
+    const regionLine = [item.lctnSdnm || item.lctnSidoNm, item.lctnSggnm, item.lctnEmdNm].filter(Boolean).join(" ");
+    const title = String(item.onbidCltrNm || item.cltrNm || "온비드 입찰결과 물건").trim();
+    const address = [title, item.cltrRadr, item.addr, regionLine]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)[0] || item.onbidCltrNm || "소재지 확인";
     const status = item.pbctStatNm || (item.pbctStatCd === "0010" ? "낙찰" : item.pbctStatCd === "0011" ? "유찰" : "입찰결과");
     const ratio = Number(item.scfbRate ?? item.scsbidRate ?? item.feeRate);
     const discount = Number.isFinite(ratio)
@@ -1241,7 +1277,7 @@ function normalizeResultItems(payload, assetType = "realty") {
       noticeNo: item.onbidPbancNo || "",
       pbctNo: item.pbctNo || "",
       round: item.pbctNsq || item.pbctSeq || "",
-      title: String(item.onbidCltrNm || item.cltrNm || "온비드 입찰결과 물건").trim(),
+      title,
       category: item.cltrUsgMclsCtgrNm || item.cltrUsgLclsCtgrNm || "부동산",
       subCategory: item.cltrUsgSclsCtgrNm || "",
       agency: item.orgNm || item.rqstOrgNm || "기관 확인",
