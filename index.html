@@ -12,7 +12,21 @@
     <link rel="manifest" href="/manifest.webmanifest" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="boot-splash" style="min-height:100vh;display:grid;place-items:center;padding:24px;font-family:Inter,Pretendard,'Noto Sans KR',sans-serif;background:#f6f7f9;color:#17324a;text-align:center;">
+        <div>
+          <strong style="display:block;font-size:20px;margin-bottom:8px;">공매레이더</strong>
+          <span>불러오는 중...</span>
+        </div>
+      </div>
+    </div>
+    <script>
+      window.addEventListener("error", function () {
+        var splash = document.getElementById("boot-splash");
+        if (!splash) return;
+        splash.innerHTML = "<strong style='display:block;font-size:18px;margin-bottom:8px;color:#b00020;'>앱 로드 실패</strong><span>강력 새로고침(Ctrl+Shift+R) 후 다시 시도해주세요.</span>";
+      });
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

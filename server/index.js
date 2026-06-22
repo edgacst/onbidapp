@@ -49,8 +49,21 @@ app.use(
 );
 
 if (existsSync(distPath)) {
-  app.use(express.static(distPath));
+  app.use(
+    express.static(distPath, {
+      setHeaders(res, filePath) {
+        if (filePath.endsWith(`${path.sep}index.html`)) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          return;
+        }
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
+    }),
+  );
   app.get(/^(?!\/onbid-api|\/onbid-file).*/, (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path.join(distPath, "index.html"));
   });
 } else {

@@ -186,6 +186,59 @@ function parseRegionFromKeyword(keyword) {
   };
 }
 
+const appViews = ["home", "search", "watch", "map", "board", "login", "signup", "mypage", "detail"];
+
+function parseAppHash(rawHash = "") {
+  const trimmed = String(rawHash || "").replace(/^#/, "").trim();
+  if (!trimmed) return { view: "home", selectedId: "" };
+  if (appViews.includes(trimmed)) return { view: trimmed, selectedId: "" };
+
+  const lotCandidate = normalizeLotId(trimmed);
+  if (isOnbidLotId(lotCandidate)) {
+    return { view: "detail", selectedId: lotCandidate };
+  }
+
+  const dashIndex = trimmed.indexOf("-");
+  if (dashIndex === -1) return { view: "home", selectedId: "" };
+
+  const viewToken = trimmed.slice(0, dashIndex);
+  const rest = trimmed.slice(dashIndex + 1);
+  if (viewToken === "detail" && rest) {
+    const selectedId = normalizeLotId(decodeURIComponent(rest));
+    return { view: "detail", selectedId: isOnbidLotId(selectedId) ? selectedId : decodeURIComponent(rest) };
+  }
+  if (appViews.includes(viewToken)) {
+    return { view: viewToken, selectedId: "" };
+  }
+  return { view: "home", selectedId: "" };
+}
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: "#f6f7f9", color: "#17324a" }}>
+          <div style={{ maxWidth: 420, textAlign: "center" }}>
+            <h1 style={{ marginTop: 0 }}>화면을 불러오지 못했습니다</h1>
+            <p>{this.state.error.message}</p>
+            <button type="button" onClick={() => window.location.reload()}>새로고침</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function parseHomeSearchInput(rawKeyword, usageCode, disposition) {
   const trimmed = String(rawKeyword || "").trim();
   const lotId = normalizeLotId(trimmed);
@@ -1025,9 +1078,7 @@ function App() {
   }, [member]);
 
   useEffect(() => {
-    const rawHash = window.location.hash.replace("#", "");
-    const [initialViewToken, ...hashRest] = rawHash.split("-");
-    const initialSelectedId = hashRest.length ? decodeURIComponent(hashRest.join("-")) : "";
+    const { view: initialView, selectedId: initialSelectedId } = parseAppHash(window.location.hash);
     const inferredAssetType = initialSelectedId ? assetTypeFromLotId(initialSelectedId) : homeAssetType;
 
     if (initialSelectedId) {
@@ -1040,10 +1091,12 @@ function App() {
     }
 
     if (!window.history.state?.appView) {
-      const initialView = initialViewToken || "home";
-      const safeInitialView = ["home", "search", "watch", "map", "board", "login", "signup", "mypage", "detail"].includes(initialView) ? initialView : "home";
-      window.history.replaceState({ appView: safeInitialView, selectedId: initialSelectedId }, "", initialSelectedId ? `#${safeInitialView}-${encodeURIComponent(initialSelectedId)}` : `#${safeInitialView}`);
-      setView(safeInitialView);
+      window.history.replaceState(
+        { appView: initialView, selectedId: initialSelectedId },
+        "",
+        initialSelectedId ? `#${initialView}-${encodeURIComponent(initialSelectedId)}` : `#${initialView}`,
+      );
+      setView(initialView);
     }
 
     const initialFilters = {
@@ -2024,4 +2077,11 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+const rootElement = document.getElementById("root");
+if (rootElement) {
+  createRoot(rootElement).render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>,
+  );
+}
