@@ -866,7 +866,6 @@ function App() {
     }
   });
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
-  const [questionForm, setQuestionForm] = useState({ title: "", body: "", category: "물건검토" });
   const [boardSearch, setBoardSearch] = useState("");
   const [boardStatus, setBoardStatus] = useState("all");
   const [questions, setQuestions] = useState(() => {
@@ -1360,28 +1359,6 @@ function App() {
     setView("mypage");
   }
 
-  function submitQuestion(event) {
-    event.preventDefault();
-    const title = questionForm.title.trim();
-    const body = questionForm.body.trim();
-    if (!title || !body) return;
-    setQuestions((current) => [
-      {
-        id: `q-${Date.now()}`,
-        number: Math.max(0, ...current.map((question) => Number(question.number || 0))) + 1,
-        title,
-        body,
-        category: questionForm.category,
-        author: member?.name || "비회원",
-        createdAt: new Date().toLocaleDateString("ko-KR"),
-        status: "답변대기",
-        views: 0,
-      },
-      ...current,
-    ]);
-    setQuestionForm({ title: "", body: "", category: "물건검토" });
-  }
-
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -1548,7 +1525,7 @@ function App() {
             </section>
 
             <section className="home-info-grid">
-              <button onClick={() => openView("board")}><MessageCircleQuestion size={22} /><strong>질문게시판</strong><span>물건 검토 질문 남기기</span></button>
+              <button onClick={() => openView("board")}><MessageCircleQuestion size={22} /><strong>질문게시판</strong><span>검토 사례와 답변 모아보기</span></button>
               <button onClick={openBidCheck}><ShieldAlert size={22} /><strong>입찰참가 안내</strong><span>일정·가격·지분 체크</span></button>
               <button onClick={() => openStatus("sold")}><Star size={22} /><strong>낙찰결과</strong><span>최근 개찰 결과 확인</span></button>
               <button onClick={() => openView("search")}><Bell size={22} /><strong>공지사항</strong><span>서비스 안내와 변경사항</span></button>
@@ -1602,11 +1579,29 @@ function App() {
           </section>
         ) : view === "board" ? (
           <section className="board-page">
+            <section className="board-hero">
+              <article className="board-summary-card board-summary-primary">
+                <span className="board-summary-label">질문 현황</span>
+                <strong>{questions.length}건</strong>
+                <p>물건 검토, 권리분석, 입찰 전략 질문을 빠르게 모아봅니다.</p>
+              </article>
+              <article className="board-summary-card">
+                <span className="board-summary-label">답변완료</span>
+                <strong>{questions.filter((question) => question.status === "답변완료").length}건</strong>
+                <p>실제 검토 흐름에 참고할 수 있는 답변이 정리되어 있습니다.</p>
+              </article>
+              <article className="board-summary-card board-summary-tip">
+                <span className="board-summary-label">이용 안내</span>
+                <strong>질문 등록은 잠시 준비 중</strong>
+                <p>우선 자주 보는 질문과 답변 중심으로 게시판을 다시 구성했습니다.</p>
+              </article>
+            </section>
+
             <section className="board-main">
               <div className="board-toolbar">
                 <div>
                   <h2>질문게시판</h2>
-                  <p>공매 물건 검토, 권리관계, 입찰 절차 질문을 모아봅니다.</p>
+                  <p>공매 물건 검토, 권리관계, 입찰 절차 질문을 주제별로 한눈에 확인합니다.</p>
                 </div>
                 <div className="board-search">
                   <Search size={17} />
@@ -1626,72 +1621,36 @@ function App() {
                 ))}
               </div>
 
-              <div className="board-table" role="table" aria-label="질문 목록">
-                <div className="board-row board-head" role="row">
-                  <span>번호</span>
-                  <span>분류</span>
-                  <span>제목</span>
-                  <span>작성자</span>
-                  <span>등록일</span>
-                  <span>조회</span>
-                  <span>상태</span>
-                </div>
+              <div className="board-list" aria-label="질문 목록">
                 {filteredQuestions.length === 0 && (
                   <div className="board-empty">
                     <MessageCircleQuestion size={28} />
                     <strong>검색된 질문이 없습니다.</strong>
-                    <p>검색어를 줄이거나 새 질문을 등록해보세요.</p>
+                    <p>검색어를 줄이거나 다른 상태 탭을 선택해보세요.</p>
                   </div>
                 )}
                 {filteredQuestions.map((question) => (
-                  <article className="board-row" key={question.id} role="row">
-                    <span className="board-no">{question.number || "-"}</span>
-                    <span><mark>{question.category || "일반"}</mark></span>
+                  <article className="board-card" key={question.id}>
+                    <div className="board-card-top">
+                      <div className="board-card-tags">
+                        <span className="board-no">#{question.number || "-"}</span>
+                        <mark>{question.category || "일반"}</mark>
+                      </div>
+                      <span className={`board-status ${question.status === "답변완료" ? "done" : ""}`}>{question.status}</span>
+                    </div>
                     <button className="board-title" type="button">
                       <strong>{question.title || question.body}</strong>
                       <small>{question.body}</small>
                     </button>
-                    <span>{question.author}</span>
-                    <span>{question.createdAt}</span>
-                    <span>{question.views ?? 0}</span>
-                    <span className={`board-status ${question.status === "답변완료" ? "done" : ""}`}>{question.status}</span>
+                    <div className="board-meta">
+                      <span>작성자 {question.author}</span>
+                      <span>등록일 {question.createdAt}</span>
+                      <span>조회 {question.views ?? 0}</span>
+                    </div>
                   </article>
                 ))}
               </div>
             </section>
-
-            <aside className="board-write-card">
-              <h2>질문 작성</h2>
-              <form className="question-form" onSubmit={submitQuestion}>
-                <label>
-                  분류
-                  <select value={questionForm.category} onChange={(event) => setQuestionForm((current) => ({ ...current, category: event.target.value }))}>
-                    <option>물건검토</option>
-                    <option>권리분석</option>
-                    <option>입찰전략</option>
-                    <option>이용문의</option>
-                  </select>
-                </label>
-                <label>
-                  제목
-                  <input
-                    value={questionForm.title}
-                    onChange={(event) => setQuestionForm((current) => ({ ...current, title: event.target.value }))}
-                    placeholder="질문 제목"
-                  />
-                </label>
-                <label>
-                  내용
-                  <textarea
-                    value={questionForm.body}
-                    onChange={(event) => setQuestionForm((current) => ({ ...current, body: event.target.value }))}
-                    placeholder="물건번호, 궁금한 점, 확인한 내용을 적어주세요."
-                    rows={6}
-                  />
-                </label>
-                <button className="primary-action" type="submit">등록하기</button>
-              </form>
-            </aside>
           </section>
         ) : view === "login" || view === "signup" ? (
           <section className="service-page narrow">

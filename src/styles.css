@@ -434,17 +434,60 @@ a {
   max-width: 1280px;
   margin: 20px auto 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
   gap: 14px;
-  align-items: start;
 }
 
 .board-main,
-.board-write-card {
+.board-summary-card {
   border: 1px solid #dfe6eb;
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 8px 20px rgba(30, 49, 65, 0.05);
+}
+
+.board-hero {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.board-summary-card {
+  min-height: 148px;
+  padding: 20px 22px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.board-summary-primary {
+  background:
+    linear-gradient(135deg, rgba(90, 86, 232, 0.14), rgba(0, 168, 168, 0.08)),
+    #fff;
+}
+
+.board-summary-tip {
+  background:
+    linear-gradient(135deg, rgba(255, 176, 32, 0.10), rgba(255, 227, 160, 0.18)),
+    #fff;
+}
+
+.board-summary-label {
+  color: #6a7884;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.board-summary-card strong {
+  color: #151b23;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.board-summary-card p {
+  margin: 0;
+  color: #697784;
+  line-height: 1.55;
 }
 
 .board-main {
@@ -464,8 +507,7 @@ a {
     #fff;
 }
 
-.board-toolbar h2,
-.board-write-card h2 {
+.board-toolbar h2 {
   margin: 0;
   font-size: 21px;
 }
@@ -533,40 +575,12 @@ a {
   font-size: 12px;
 }
 
-.board-table {
-  display: grid;
-}
-
-.board-row {
-  display: grid;
-  grid-template-columns: 56px 92px minmax(0, 1fr) 104px 116px 58px 86px;
-  gap: 10px;
-  align-items: center;
-  min-height: 66px;
-  padding: 12px 18px;
-  border-bottom: 1px solid #edf2f5;
-  color: #52616e;
-  font-size: 14px;
-}
-
-.board-row:last-child {
-  border-bottom: 0;
-}
-
-.board-head {
-  min-height: 42px;
-  background: #f7fafc;
-  color: #6a7884;
-  font-size: 12px;
-  font-weight: 900;
-}
-
 .board-no {
   color: #7b8791;
   font-weight: 800;
 }
 
-.board-row mark {
+.board-card mark {
   width: fit-content;
   border-radius: 999px;
   background: #e8f7f4;
@@ -574,6 +588,37 @@ a {
   padding: 5px 8px;
   font-size: 12px;
   font-weight: 900;
+}
+
+.board-list {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  background: #f6f8fa;
+}
+
+.board-card {
+  border: 1px solid #e2e9ee;
+  border-radius: 12px;
+  background: #fff;
+  padding: 16px 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.board-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.board-card-tags {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .board-title {
@@ -600,6 +645,14 @@ a {
 
 .board-title small {
   color: #7a8792;
+}
+
+.board-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  color: #60707d;
+  font-size: 13px;
 }
 
 .board-status {
@@ -633,16 +686,6 @@ a {
 
 .board-empty p {
   margin: 0;
-}
-
-.board-write-card {
-  padding: 18px;
-  position: sticky;
-  top: 18px;
-}
-
-.board-write-card .question-form {
-  margin-top: 14px;
 }
 
 .question-form {
@@ -2433,8 +2476,12 @@ a {
   }
 
   .board-page {
-    grid-template-columns: 1fr;
     margin-top: 12px;
+    gap: 12px;
+  }
+
+  .board-hero {
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
@@ -2467,43 +2514,25 @@ a {
     flex: 0 0 auto;
   }
 
-  .board-head {
-    display: none;
-  }
-
-  .board-table {
-    gap: 10px;
+  .board-list {
     padding: 12px;
-    background: #f6f8fa;
   }
 
-  .board-row {
-    grid-template-columns: 1fr auto;
-    gap: 7px 10px;
-    min-height: 0;
-    border: 1px solid #dfe6eb;
-    border-radius: 8px;
-    background: #fff;
+  .board-card {
     padding: 13px;
-    font-size: 13px;
   }
 
-  .board-row > span:nth-of-type(4),
-  .board-row > span:nth-of-type(5) {
-    display: none;
+  .board-card-top {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .board-no {
-    order: 1;
-  }
-
-  .board-row mark {
-    order: 2;
+  .board-card-tags {
+    gap: 8px;
   }
 
   .board-title {
-    order: 3;
-    grid-column: 1 / -1;
+    gap: 6px;
   }
 
   .board-title strong {
@@ -2521,12 +2550,7 @@ a {
   }
 
   .board-status {
-    order: 4;
-  }
-
-  .board-write-card {
-    position: static;
-    padding: 14px;
+    align-self: flex-start;
   }
 
   .lot-row {
