@@ -399,6 +399,28 @@ function onbidSearchUrl(lot) {
   return `https://www.onbid.co.kr/op/ppa/plnmmn/publicAnnounceList.do?searchCltrNm=${query}`;
 }
 
+function onbidDetailScreen(lot) {
+  if (lot?.assetType === "car") return { cltrPrptDivCd: "6", cltrScrnGrpCd: "2" };
+  if (lot?.assetType === "movable") return { cltrPrptDivCd: "7", cltrScrnGrpCd: "3" };
+  return { cltrPrptDivCd: "5", cltrScrnGrpCd: "1" };
+}
+
+function onbidDetailUrl(lot) {
+  if (!lot?.onbidNo || !lot?.conditionNo || !lot?.pbctNo) {
+    return onbidSearchUrl(lot);
+  }
+  const screen = onbidDetailScreen(lot);
+  const query = new URLSearchParams({
+    cltrPrptDivCd: screen.cltrPrptDivCd,
+    cltrScrnGrpCd: screen.cltrScrnGrpCd,
+    onbidCltrno: String(lot.onbidNo),
+    pbctCdtnNo: String(lot.conditionNo),
+    pbctNo: String(lot.pbctNo),
+  });
+  if (lot.noticeNo) query.set("onbidPbancNo", String(lot.noticeNo));
+  return `https://www.onbid.co.kr/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do?${query.toString()}`;
+}
+
 function assetTypeFromLotId(id) {
   const text = String(id || "");
   if (/-0500-/.test(text)) return "car";
@@ -605,6 +627,50 @@ function AuctionImage({ src, fallbackSrc = "", alt, className = "" }) {
       referrerPolicy="no-referrer"
       onError={() => setSourceIndex((index) => index + 1)}
     />
+  );
+}
+
+function PhotoGallery({ photos, loading, title }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [photos]);
+
+  const activePhoto = photos[activeIndex] || "";
+
+  return (
+    <section className="photo-gallery" aria-label="물건 사진">
+      {loading && photos.length === 0 && (
+        <div className="photo-gallery-empty loading">사진 불러오는 중</div>
+      )}
+      {!loading && photos.length === 0 && (
+        <div className="photo-gallery-empty">사진 없음</div>
+      )}
+      {activePhoto && (
+        <div className="photo-gallery-main">
+          <AuctionImage src={activePhoto} alt={`${title} 사진 ${activeIndex + 1}`} />
+        </div>
+      )}
+      {photos.length > 1 && (
+        <div className="photo-gallery-thumbs">
+          {photos.map((src, index) => (
+            <button
+              key={`${src}-${index}`}
+              type="button"
+              className={index === activeIndex ? "active" : ""}
+              aria-label={`${title} 사진 ${index + 1} 보기`}
+              onClick={() => setActiveIndex(index)}
+            >
+              <AuctionImage src={src} alt="" />
+            </button>
+          ))}
+        </div>
+      )}
+      {!loading && photos.length > 0 && (
+        <p className="photo-gallery-count">사진 {activeIndex + 1} / {photos.length}</p>
+      )}
+    </section>
   );
 }
 
@@ -2234,15 +2300,7 @@ function App() {
           <section className="detail-page">
             <button className="back-button" onClick={() => openView("search")}>목록으로</button>
             <article className="detail-panel detail-page-panel">
-              <div className="photo-strip">
-                {galleryLoading && displayPhotos.length === 0 && (
-                  <div className="photo-empty loading">사진 불러오는 중</div>
-                )}
-                {displayPhotos.map((src, index) => (
-                  <AuctionImage key={`${src}-${index}`} src={src} alt={`${selected.title} 사진 ${index + 1}`} />
-                ))}
-                {!galleryLoading && !displayPhotos.length && <div className="photo-empty">사진 없음</div>}
-              </div>
+              <PhotoGallery photos={displayPhotos} loading={galleryLoading} title={selected.title} />
 
               <div className="detail-head">
                 <span className={`status ${statusClass(selected.status)}`}>{selected.status}</span>
@@ -2300,7 +2358,7 @@ function App() {
               </div>
 
               <div className="action-row">
-                <a className="secondary-action" href={onbidSearchUrl(selected)} target="_blank" rel="noreferrer">온비드 원문 <ExternalLink size={16} /></a>
+                <a className="secondary-action" href={onbidDetailUrl(selected)} target="_blank" rel="noreferrer">온비드 상세 보기 <ExternalLink size={16} /></a>
                 <button className="primary-action" onClick={openBidCheck}>검토표 <ChevronRight size={18} /></button>
               </div>
             </article>
@@ -2478,15 +2536,7 @@ function App() {
 
           {selected && (
             <aside className="detail-panel">
-              <div className="photo-strip">
-                {galleryLoading && displayPhotos.length === 0 && (
-                  <div className="photo-empty loading">사진 불러오는 중</div>
-                )}
-                {displayPhotos.map((src, index) => (
-                  <AuctionImage key={`${src}-${index}`} src={src} alt={`${selected.title} 사진 ${index + 1}`} />
-                ))}
-                {!galleryLoading && !displayPhotos.length && <div className="photo-empty">사진 없음</div>}
-              </div>
+              <PhotoGallery photos={displayPhotos} loading={galleryLoading} title={selected.title} />
 
               <div className="detail-head">
                 <span className={`status ${statusClass(selected.status)}`}>{selected.status}</span>
@@ -2544,7 +2594,7 @@ function App() {
               </div>
 
               <div className="action-row">
-                <a className="secondary-action" href={onbidSearchUrl(selected)} target="_blank" rel="noreferrer">온비드 원문 <ExternalLink size={16} /></a>
+                <a className="secondary-action" href={onbidDetailUrl(selected)} target="_blank" rel="noreferrer">온비드 상세 보기 <ExternalLink size={16} /></a>
                 <button className="primary-action" onClick={openBidCheck}>검토표 <ChevronRight size={18} /></button>
               </div>
             </aside>
