@@ -15,7 +15,7 @@ import {
   Home,
   Landmark,
   Loader2,
-  Map,
+  Map as MapIcon,
   MapPin,
   MessageCircleQuestion,
   Navigation,
@@ -1397,7 +1397,7 @@ function App() {
           <button className={view === "home" ? "active" : ""} onClick={() => openView("home")}><Home size={18} /> 홈</button>
           <button className={view === "search" || view === "detail" ? "active" : ""} onClick={() => openView("search")}><Search size={18} /> 탐색</button>
           <button className={view === "watch" ? "active" : ""} onClick={() => openView("watch")}><Heart size={18} /> 관심</button>
-          <button className={view === "map" ? "active" : ""} onClick={() => openView("map")}><Map size={18} /> 지도</button>
+          <button className={view === "map" ? "active" : ""} onClick={() => openView("map")}><MapIcon size={18} /> 지도</button>
           <button className={view === "board" ? "active" : ""} onClick={() => openView("board")}><MessageCircleQuestion size={18} /> 질문</button>
           <button className={view === "mypage" ? "active" : ""} onClick={() => openView("mypage")}><User size={18} /> 내정보</button>
         </nav>

@@ -21,10 +21,17 @@
       </div>
     </div>
     <script>
-      window.addEventListener("error", function () {
+      window.addEventListener("error", function (event) {
         var splash = document.getElementById("boot-splash");
         if (!splash) return;
-        splash.innerHTML = "<strong style='display:block;font-size:18px;margin-bottom:8px;color:#b00020;'>앱 로드 실패</strong><span>강력 새로고침(Ctrl+Shift+R) 후 다시 시도해주세요.</span>";
+        if (event.target && event.target.tagName === "SCRIPT") {
+          splash.innerHTML = "<strong style='display:block;font-size:18px;margin-bottom:8px;color:#b00020;'>앱 파일 로드 실패</strong><span>서버를 재시작하고 강력 새로고침(Ctrl+Shift+R) 해주세요.</span>";
+          return;
+        }
+        if (!document.getElementById("root")?.querySelector(".app-shell")) {
+          var detail = event.message || "알 수 없는 오류";
+          splash.innerHTML = "<strong style='display:block;font-size:18px;margin-bottom:8px;color:#b00020;'>앱 로드 실패</strong><span>" + detail + "</span>";
+        }
       });
     </script>
     <script type="module" src="/src/main.jsx"></script>
