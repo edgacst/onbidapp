@@ -1483,7 +1483,9 @@ function App() {
         setLoading(false);
       }, API_FETCH_TIMEOUT_MS + 5000);
 
-      const preserveId = filters.preserveSelectedId ? normalizeLotId(filters.preserveSelectedId) : "";
+      const preserveId = filters.preserveSelectedId
+        ? normalizeLotId(filters.preserveSelectedId)
+        : (view === "detail" && selectedId ? normalizeLotId(selectedId) : "");
       if (preserveId && !filters.keyword?.trim() && !filters.statusCode) {
         const assetType = filters.assetType || assetTypeFromLotId(preserveId);
         const foundLot = await fetchLotByManagementNo(preserveId, assetType);
@@ -1498,6 +1500,12 @@ function App() {
           setStatusTotals({ available: 1, ready: matchesStatusFocus(foundLot, "ready") ? 1 : 0, sold: 0, failed: 0 });
           return;
         }
+
+        setData({ lots: [], pageNo: 1, numOfRows: PAGE_SIZE, totalCount: 0, sample: false });
+        setSelectedId(preserveId);
+        setStatusTotals({ available: 0, ready: 0, sold: 0, failed: 0 });
+        setError("해당 물건관리번호를 찾지 못했습니다. 잠시 후 다시 시도해주세요.");
+        return;
       }
 
       const keywordLotId = isOnbidLotId(filters.keyword) ? normalizeLotId(filters.keyword.trim()) : "";
@@ -1537,7 +1545,11 @@ function App() {
         }
       }
       setData({ ...result, sample: false });
-      setSelectedId(filters.preserveSelectedId || result.lots[0]?.id || "");
+      const nextSelectedId = preserveId
+        || (result.lots.some((lot) => lot.id === selectedId) ? selectedId : "")
+        || result.lots[0]?.id
+        || "";
+      setSelectedId(nextSelectedId);
       if (!filters.statusCode) {
         const availableCount = result.totalCount || result.lots.length;
         window.setTimeout(() => {
@@ -1559,7 +1571,9 @@ function App() {
         setSelectedId("");
       } else {
         setData({ lots: sampleLots, totalCount: sampleLots.length, sample: true });
-        setSelectedId(sampleLots[0].id);
+        if (!(view === "detail" && selectedId)) {
+          setSelectedId(sampleLots[0].id);
+        }
       }
       setError(err instanceof Error ? err.message : "온비드 API 호출에 실패했습니다.");
     } finally {
