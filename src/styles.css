@@ -2758,6 +2758,44 @@ a {
   vertical-align: top;
 }
 
+.lot-detail-usage-table th {
+  width: 148px;
+}
+
+.lot-detail-appraisal-table {
+  table-layout: fixed;
+}
+
+.lot-detail-appraisal-table th,
+.lot-detail-appraisal-table td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.lot-detail-appraisal-table th:first-child,
+.lot-detail-appraisal-table td:first-child,
+.lot-detail-appraisal-table th:nth-child(2),
+.lot-detail-appraisal-table td:nth-child(2) {
+  text-align: left;
+}
+
+.lot-detail-appraisal-amount {
+  font-weight: 800;
+  color: #17324a;
+}
+
+.lot-detail-pdf-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: #d9485f;
+  background: #fff5f5;
+  text-decoration: none;
+}
+
 .lot-detail-footer-actions {
   display: flex;
   flex-wrap: wrap;

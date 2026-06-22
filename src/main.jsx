@@ -500,6 +500,108 @@ function extractOnbidBadgesAfterLabel(html, label) {
     .filter(Boolean);
 }
 
+function extractOnbidSectionBlock(html, sectionTitle) {
+  const idx = html.indexOf(sectionTitle);
+  if (idx < 0) return "";
+  const next = html.indexOf('<div class="gap_group', idx + sectionTitle.length);
+  return next > idx ? html.slice(idx, next) : html.slice(idx, idx + 8000);
+}
+
+function extractOnbidCaseRows(html, sectionTitle) {
+  const block = extractOnbidSectionBlock(html, sectionTitle);
+  if (!block) return [];
+  return [...block.matchAll(
+    /<div class="tit_box02">\s*<span class="tit01">([^<]+)<\/span>[\s\S]*?<div class="con_area01">[\s\S]*?<span class="tit01">([^<]*)<\/span>/g,
+  )]
+    .map((match) => ({
+      label: match[1].trim(),
+      value: match[2].trim() || "-",
+    }));
+}
+
+function extractOnbidTdText(tdHtml) {
+  const amount = tdHtml.match(/<span class="txt03[^"]*">([^<]+)</)?.[1]?.trim();
+  const text = tdHtml.match(/<span class="txt01[^"]*">([^<]*)</)?.[1]?.trim();
+  return amount || text || "";
+}
+
+function extractOnbidAppraisalRows(html) {
+  const block = extractOnbidSectionBlock(html, "감정평가정보");
+  const tbodyMatch = block.match(/<tbody>([\s\S]*?)<\/tbody>/);
+  if (!tbodyMatch) return [];
+
+  const rows = [];
+  for (const trMatch of tbodyMatch[1].matchAll(/<tr>([\s\S]*?)<\/tr>/g)) {
+    const tds = [...trMatch[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
+    if (tds.length < 4) continue;
+
+    const pdfMatch = (tds[4] || "").match(/fn_chkPdfRead\('(\d+)','(\d+)','[^']*','([^']+)','([^']+)'/);
+    let reportUrl = "";
+    if (pdfMatch) {
+      reportUrl = buildOnbidFileDownloadUrl(
+        {
+          atchFileLstNo: pdfMatch[1],
+          hashCrpsNo: pdfMatch[4],
+          path: "/op/cm/syc/filemng/filemngprcs/FileMngPrcsController/dnldFile.do",
+        },
+        pdfMatch[2],
+        "ORGNL_NM",
+      );
+    }
+
+    rows.push({
+      agency: extractOnbidTdText(tds[0]) || "-",
+      appraiser: extractOnbidTdText(tds[1]) || "-",
+      date: extractOnbidTdText(tds[2]) || "-",
+      amount: extractOnbidTdText(tds[3]) || "-",
+      reportUrl,
+    });
+  }
+  return rows;
+}
+
+function buildUsageRows(pageMeta, lot) {
+  if (pageMeta?.usageRows?.length) return pageMeta.usageRows;
+  return [
+    { label: "위치 및 주위환경", value: "-" },
+    { label: "이용상태", value: "-" },
+    { label: "기타사항", value: "-" },
+  ];
+}
+
+function buildAppraisalRows(pageMeta, lot, detail) {
+  if (pageMeta?.appraisalRows?.length) return pageMeta.appraisalRows;
+
+  const detailAppraisals = asArray(detail?.appraisals);
+  if (detailAppraisals.length) {
+    return detailAppraisals.map((item) => ({
+      agency: item.apslEvlOrgNm || item.apslEvlClgNm || item.orgNm || "-",
+      appraiser: item.apslEvlPsnNm || "-",
+      date: formatOnbidDate(item.apslEvlDt || item.apslDt) || "-",
+      amount: formatFullMoney(parseMoney(item.apslPrc ?? item.apslEvlAmt ?? item.apslAmt)),
+      reportUrl: extractPhotoUrl(item.atchFileUrl || item.fileUrl || item.urlAdr || item.apslEvlFileUrl || ""),
+    }));
+  }
+
+  if (lot?.appraised) {
+    return [{
+      agency: "-",
+      appraiser: "-",
+      date: "-",
+      amount: formatFullMoney(lot.appraised),
+      reportUrl: "",
+    }];
+  }
+  return [];
+}
+
+function buildDeliveryRows(pageMeta, lot) {
+  if (pageMeta?.deliveryRows?.length) return pageMeta.deliveryRows;
+  const responsibility = lot?.raw?.evcRsbyTrgtCont || lot?.note?.replace(/^인도인수책임:\s*/, "") || "";
+  if (!responsibility) return [{ label: "인도/인수 책임", value: "-" }];
+  return [{ label: "인도/인수 책임", value: responsibility }];
+}
+
 function parseOnbidDetailHtml(html) {
   if (!html || html.length < 1000) return null;
 
@@ -522,12 +624,19 @@ function parseOnbidDetailHtml(html) {
     );
   }
 
+  const usageRows = extractOnbidCaseRows(html, "이용 현황");
+  const appraisalRows = extractOnbidAppraisalRows(html);
+  const deliveryRows = extractOnbidCaseRows(html, "인도/인수 책임 및 부대조건");
+
   return {
     noticeDate,
     firstNoticeDate,
     bidMethods,
     bidRestrictions,
-    appraisalUrl,
+    appraisalUrl: appraisalUrl || appraisalRows[0]?.reportUrl || "",
+    usageRows,
+    appraisalRows,
+    deliveryRows,
   };
 }
 
@@ -555,6 +664,7 @@ async function fetchOnbidPageMeta(lot) {
 
 function buildAppraisalUrlFromLot(lot, pageMeta = {}, detail = null) {
   if (pageMeta?.appraisalUrl) return pageMeta.appraisalUrl;
+  if (pageMeta?.appraisalRows?.[0]?.reportUrl) return pageMeta.appraisalRows[0].reportUrl;
 
   const appraisalItems = asArray(
     detail?.appraisals
@@ -987,6 +1097,12 @@ function LotDetailPanel({
   const capabilityTags = lotCapabilityTags(lot, pageMeta);
   const restrictionTags = bidRestrictionTags(lot, pageMeta);
   const appraisalUrl = buildAppraisalUrlFromLot(lot, pageMeta, detail);
+  const usageRows = buildUsageRows(pageMeta, lot);
+  const appraisalRows = buildAppraisalRows(pageMeta, lot, detail).map((row) => ({
+    ...row,
+    reportUrl: row.reportUrl || appraisalUrl,
+  }));
+  const deliveryRows = buildDeliveryRows(pageMeta, lot);
   const roadAddress = lot.roadAddress || detailItem.rdnmAdrs || raw.rdnmAdrs || raw.roadNmRadr || "-";
   const lotAddress = pickFullLotAddress(lot, detailItem);
   const isSeized = /압류/.test(propertyTag);
@@ -1236,8 +1352,74 @@ function LotDetailPanel({
                   </tbody>
                 </table>
               </div>
+
+              <div className="lot-detail-section">
+                <h4>이용 현황</h4>
+                <table className="lot-detail-kv-table lot-detail-usage-table">
+                  <tbody>
+                    {usageRows.map((row) => (
+                      <tr key={row.label}>
+                        <th>{row.label}</th>
+                        <td>{row.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="lot-detail-section">
+                <h4>감정평가정보</h4>
+                <table className="lot-detail-table lot-detail-appraisal-table">
+                  <thead>
+                    <tr>
+                      <th>감정평가기관</th>
+                      <th>감정평가사</th>
+                      <th>감정평가일</th>
+                      <th>감정평가금액(원)</th>
+                      <th>감정평가서</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {appraisalRows.length > 0 ? appraisalRows.map((row, index) => (
+                      <tr key={`${row.agency}-${row.date}-${index}`}>
+                        <td>{row.agency}</td>
+                        <td>{row.appraiser}</td>
+                        <td>{row.date}</td>
+                        <td className="lot-detail-appraisal-amount">{row.amount}</td>
+                        <td>
+                          {row.reportUrl ? (
+                            <a className="lot-detail-pdf-link" href={row.reportUrl} target="_blank" rel="noreferrer" aria-label="감정평가서 PDF">
+                              <FileText size={18} />
+                            </a>
+                          ) : "-"}
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={5}>{pageMetaLoading ? "불러오는 중" : "감정평가정보가 없습니다."}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="lot-detail-section">
+                <h4>인도/인수 책임 및 부대조건</h4>
+                <table className="lot-detail-kv-table lot-detail-usage-table">
+                  <tbody>
+                    {deliveryRows.map((row) => (
+                      <tr key={row.label}>
+                        <th>{row.label}</th>
+                        <td>{row.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {pageMetaLoading && <p className="muted">온비드 상세 정보를 불러오는 중입니다.</p>}
               {detailLoading && <p className="muted">상세 API 조회 중입니다.</p>}
-              {detailError && <p className="muted">상세 API 권한이 없어 목록 데이터 기준으로 표시 중입니다.</p>}
+              {detailError && <p className="muted">상세 API 권한이 없어 온비드 원문 기준으로 표시 중입니다.</p>}
             </>
           )}
 
