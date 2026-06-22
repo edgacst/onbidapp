@@ -1104,18 +1104,34 @@ function LotDetailPanel({
           {activeTab === "bid" && (
             <>
               <h3><CheckCircle2 size={18} /> 입찰정보</h3>
-              <table className="lot-detail-kv-table">
-                <tbody>
-                  <tr><th>입찰방식</th><td>{lot.bidMethod || "-"}</td></tr>
-                  <tr><th>입찰기간</th><td>{lot.starts || "-"} ~ {lot.ends || "-"}</td></tr>
-                  <tr><th>최저입찰가</th><td>{formatFullMoney(lot.minimum)}</td></tr>
-                  <tr><th>감정평가액</th><td>{formatFullMoney(lot.appraised)}</td></tr>
-                  <tr><th>배분요구종기</th><td>{lot.distributionDue || "-"}</td></tr>
-                  <tr><th>유찰횟수</th><td>{lot.failedCount ?? 0}회</td></tr>
-                </tbody>
-              </table>
+              <div className="lot-detail-field-grid">
+                <div className="lot-detail-field">
+                  <strong>입찰방식</strong>
+                  <span>{lot.bidMethod || "-"}</span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>입찰기간</strong>
+                  <span>{lot.starts || "-"} ~ {lot.ends || "-"}</span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>최저입찰가</strong>
+                  <span>{formatFullMoney(lot.minimum)}</span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>감정평가액</strong>
+                  <span>{formatFullMoney(lot.appraised)}</span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>배분요구종기</strong>
+                  <span>{lot.distributionDue || "-"}</span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>유찰횟수</strong>
+                  <span>{lot.failedCount ?? 0}회</span>
+                </div>
+              </div>
               {capabilityTags.length > 0 && (
-                <div className="lot-detail-chip-row">
+                <div className="lot-detail-meta-footer">
                   {capabilityTags.map((tag) => <span key={tag} className="lot-detail-chip blue">{tag}</span>)}
                 </div>
               )}

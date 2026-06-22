@@ -2683,6 +2683,10 @@ a {
   padding: 18px;
 }
 
+.lot-detail-tab-panel .lot-detail-meta-footer {
+  margin-top: 12px;
+}
+
 .lot-detail-tab-panel h3 {
   margin: 0 0 16px;
   display: flex;
