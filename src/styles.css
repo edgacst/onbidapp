@@ -2518,6 +2518,23 @@ a {
   grid-column: 1;
 }
 
+.lot-detail-meta-card li.lot-detail-meta-row-span {
+  grid-column: 1 / -1;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: start;
+}
+
+.lot-detail-field-span {
+  grid-column: 1 / -1;
+}
+
+.lot-detail-field-span > span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .lot-detail-meta-card strong {
   color: #334351;
   white-space: nowrap;

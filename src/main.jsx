@@ -457,6 +457,121 @@ function onbidDetailUrl(lot) {
   return `https://www.onbid.co.kr/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do?${query.toString()}`;
 }
 
+function onbidDetailPageProxyUrl(lot) {
+  const url = onbidDetailUrl(lot);
+  if (!url.startsWith("https://www.onbid.co.kr")) return "";
+  return toOnbidFileProxy(url.replace("https://www.onbid.co.kr", ""));
+}
+
+function formatBidStyle(raw = {}) {
+  const cptn = String(raw.cptnMthodNm || "").trim();
+  const method = String(raw.bidMthodNm || "").trim();
+  const div = String(raw.bidDivNm || "").trim();
+  if (cptn && method && div) return `${cptn}(${method})/${div}`;
+  if (cptn && method) return `${cptn}(${method})/`;
+  if (cptn && div) return `${cptn}/${div}`;
+  return [cptn, div].filter(Boolean).join(" / ") || "-";
+}
+
+function mergeBadgeLists(...lists) {
+  const out = [];
+  for (const list of lists) {
+    for (const item of list || []) {
+      const text = String(item || "").trim();
+      if (text && !out.includes(text)) out.push(text);
+    }
+  }
+  return out;
+}
+
+function extractOnbidHtmlValue(html, label) {
+  const re = new RegExp(`${label}<\\/span>[\\s\\S]{0,180}?txt01[^>]*>([^<]+)<`, "i");
+  return html.match(re)?.[1]?.trim() || "";
+}
+
+function extractOnbidBadgesAfterLabel(html, label) {
+  const idx = html.indexOf(label);
+  if (idx < 0) return [];
+  const slice = html.slice(idx, idx + 1400);
+  const end = slice.indexOf("</ul>");
+  const section = end > 0 ? slice.slice(0, end) : slice;
+  return [...section.matchAll(/op_cm_badge[^>]*>([^<]+)</g)]
+    .map((match) => match[1].trim())
+    .filter(Boolean);
+}
+
+function parseOnbidDetailHtml(html) {
+  if (!html || html.length < 1000) return null;
+
+  const noticeDate = extractOnbidHtmlValue(html, "공고일자");
+  const firstNoticeDate = extractOnbidHtmlValue(html, "최초공고일자");
+  const bidMethods = extractOnbidBadgesAfterLabel(html, '<span class="tit01">입찰방법</span>');
+  const bidRestrictions = extractOnbidBadgesAfterLabel(html, "입찰제한정보");
+
+  const pdfMatch = html.match(/fn_chkPdfRead\('(\d+)','(\d+)','[^']*','([^']+)','([^']+)'/);
+  let appraisalUrl = "";
+  if (pdfMatch) {
+    appraisalUrl = buildOnbidFileDownloadUrl(
+      {
+        atchFileLstNo: pdfMatch[1],
+        hashCrpsNo: pdfMatch[4],
+        path: "/op/cm/syc/filemng/filemngprcs/FileMngPrcsController/dnldFile.do",
+      },
+      pdfMatch[2],
+      "ORGNL_NM",
+    );
+  }
+
+  return {
+    noticeDate,
+    firstNoticeDate,
+    bidMethods,
+    bidRestrictions,
+    appraisalUrl,
+  };
+}
+
+const onbidPageMetaCache = new Map();
+
+async function fetchOnbidPageMeta(lot) {
+  if (!lot?.id) return null;
+  const cacheKey = `${lot.id}:${lot.conditionNo || ""}`;
+  if (onbidPageMetaCache.has(cacheKey)) return onbidPageMetaCache.get(cacheKey);
+
+  const url = onbidDetailPageProxyUrl(lot);
+  if (!url) return null;
+
+  try {
+    const response = await apiFetch(url);
+    const html = await response.text();
+    if (!response.ok) return null;
+    const parsed = parseOnbidDetailHtml(html);
+    if (parsed) onbidPageMetaCache.set(cacheKey, parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function buildAppraisalUrlFromLot(lot, pageMeta = {}, detail = null) {
+  if (pageMeta?.appraisalUrl) return pageMeta.appraisalUrl;
+
+  const appraisalItems = asArray(
+    detail?.appraisals
+    ?? detail?.item?.apslEvlClgList?.item
+    ?? detail?.item?.apslEvlClgList
+    ?? detail?.item?.apslEvlList?.item,
+  );
+  for (const item of appraisalItems) {
+    const url = extractPhotoUrl(item.atchFileUrl || item.fileUrl || item.urlAdr || item.apslEvlFileUrl || "");
+    if (url) return url;
+  }
+
+  const meta = parseOnbidFileDownloadUrl(lot?.thumbnail || lot?.raw?.thnlImgUrlAdr || "");
+  if (meta) return buildOnbidFileDownloadUrl(meta, 1, "ORGNL_NM");
+  return "";
+}
+
 function assetTypeFromLotId(id) {
   const text = String(id || "");
   if (/-0500-/.test(text)) return "car";
@@ -796,23 +911,28 @@ function buildAreaRows(lot, detail) {
   return rows;
 }
 
-function lotCapabilityTags(lot) {
+function lotCapabilityTags(lot, pageMeta = {}) {
   const raw = lot?.raw || {};
-  return [
+  const fromApi = [
     raw.collbBidPsblYn === "Y" ? "공동입찰가능" : "",
-    raw.agntBidPsblYn === "Y" || raw.prxyBidPsblYn === "Y" ? "대리입찰가능" : "",
+    raw.subtBidPsblYn === "Y" || raw.agntBidPsblYn === "Y" || raw.prxyBidPsblYn === "Y" ? "대리입찰가능" : "",
     raw.scndRnkAplyPsblYn === "Y" ? "차순위 신청가능" : "",
-    lot.tags.includes("공동입찰 가능") ? "공동입찰가능" : "",
-  ].filter(Boolean).filter((tag, index, tags) => tags.indexOf(tag) === index);
+  ].filter(Boolean);
+  return mergeBadgeLists(fromApi, pageMeta.bidMethods);
 }
 
-function bidRestrictionTags(lot) {
+function bidRestrictionTags(lot, pageMeta = {}) {
   const raw = lot?.raw || {};
-  return [
+  const fromApi = [
     "1인 이상의 유효한 입찰",
-    raw.smlCltrReBidPsblYn === "Y" ? "동일물건 2회 이상 입찰가능" : "",
+    raw.twtmGthrBidPsblYn === "Y" || raw.smlCltrReBidPsblYn === "Y" ? "동일물건 2회 이상 입찰가능" : "",
     raw.sameIpBidPsblYn === "Y" ? "동일IP 중복입찰가능" : "",
   ].filter(Boolean);
+  const htmlList = pageMeta.bidRestrictions || [];
+  if (htmlList.length > fromApi.filter((tag) => tag !== "1인 이상의 유효한 입찰").length) {
+    return htmlList.length ? htmlList : fromApi;
+  }
+  return mergeBadgeLists(fromApi, htmlList);
 }
 
 function photoDisplayFallback(url) {
@@ -826,6 +946,8 @@ function photoDisplayFallback(url) {
 function LotDetailPanel({
   lot,
   detail,
+  pageMeta,
+  pageMetaLoading,
   detailLoading,
   detailError,
   photos,
@@ -859,8 +981,12 @@ function LotDetailPanel({
   const roundLeft = String(raw.pbctNsq || lot.round || "-").padStart(3, "0");
   const roundRight = String(lot.conditionNo || raw.pbctCdtnNo || "-").slice(-3).padStart(3, "0");
   const areaRows = buildAreaRows(lot, detail);
-  const capabilityTags = lotCapabilityTags(lot);
-  const restrictionTags = bidRestrictionTags(lot);
+  const bidStyle = lot.bidStyle || formatBidStyle(raw);
+  const noticeDate = pageMeta?.noticeDate || lot.noticeDate || "-";
+  const firstNoticeDate = pageMeta?.firstNoticeDate || lot.firstNoticeDate || noticeDate || "-";
+  const capabilityTags = lotCapabilityTags(lot, pageMeta);
+  const restrictionTags = bidRestrictionTags(lot, pageMeta);
+  const appraisalUrl = buildAppraisalUrlFromLot(lot, pageMeta, detail);
   const roadAddress = lot.roadAddress || detailItem.rdnmAdrs || raw.rdnmAdrs || raw.roadNmRadr || "-";
   const lotAddress = pickFullLotAddress(lot, detailItem);
   const isSeized = /압류/.test(propertyTag);
@@ -968,7 +1094,7 @@ function LotDetailPanel({
             </div>
             <div className="lot-detail-spec-item span-2">
               <span>입찰방식</span>
-              <strong>{lot.bidMethod || lot.tags[2] || "-"}</strong>
+              <strong>{bidStyle}</strong>
             </div>
             <div className="lot-detail-spec-item">
               <span>감정평가금액(원)</span>
@@ -995,7 +1121,7 @@ function LotDetailPanel({
             </div>
             <div className="lot-detail-spec-item">
               <span>최초공고일자</span>
-              <strong>{lot.firstNoticeDate || "-"}</strong>
+              <strong>{firstNoticeDate}</strong>
             </div>
             <div className="lot-detail-spec-item">
               <span>유찰횟수</span>
@@ -1014,17 +1140,29 @@ function LotDetailPanel({
             <strong>공고종류</strong>
             <span className="lot-detail-inline-tag">{raw.pbancDivNm || raw.pbancTypeNm || "일반공고"}</span>
           </li>
-          <li><strong>공고일자</strong><span>{lot.noticeDate || "-"}</span></li>
+          <li><strong>공고일자</strong><span>{noticeDate}</span></li>
         </ul>
-        {(capabilityTags.length > 0 || restrictionTags.length > 0 || detail?.appraisals?.length > 0 || onbidUrl) && (
+        <ul>
+          <li className="lot-detail-meta-row-span">
+            <strong>입찰방법</strong>
+            <div className="lot-detail-chip-row">
+              {capabilityTags.length > 0 ? capabilityTags.map((tag) => (
+                <span key={tag} className="lot-detail-chip blue">{tag}</span>
+              )) : <span className="muted">{pageMetaLoading ? "불러오는 중" : "-"}</span>}
+            </div>
+          </li>
+          <li className="lot-detail-meta-row-span">
+            <strong>입찰제한정보</strong>
+            <div className="lot-detail-chip-row">
+              {restrictionTags.map((tag) => <span key={tag} className="lot-detail-chip gray">{tag}</span>)}
+            </div>
+          </li>
+        </ul>
+        {appraisalUrl && (
           <div className="lot-detail-meta-footer">
-            {capabilityTags.map((tag) => <span key={tag} className="lot-detail-chip blue">{tag}</span>)}
-            {restrictionTags.map((tag) => <span key={tag} className="lot-detail-chip gray">{tag}</span>)}
-            {(detail?.appraisals?.length > 0 || onbidUrl) && (
-              <a className="lot-detail-doc-link" href={onbidUrl} target="_blank" rel="noreferrer">
-                <FileText size={16} /> 감정평가서
-              </a>
-            )}
+            <a className="lot-detail-doc-link" href={appraisalUrl} target="_blank" rel="noreferrer">
+              <FileText size={16} /> 감정평가서
+            </a>
           </div>
         )}
       </section>
@@ -1133,7 +1271,21 @@ function LotDetailPanel({
               <div className="lot-detail-field-grid">
                 <div className="lot-detail-field">
                   <strong>입찰방식</strong>
-                  <span>{lot.bidMethod || "-"}</span>
+                  <span>{bidStyle}</span>
+                </div>
+                <div className="lot-detail-field lot-detail-field-span">
+                  <strong>입찰방법</strong>
+                  <span className="lot-detail-chip-row">
+                    {capabilityTags.length > 0 ? capabilityTags.map((tag) => (
+                      <span key={tag} className="lot-detail-chip blue">{tag}</span>
+                    )) : "-"}
+                  </span>
+                </div>
+                <div className="lot-detail-field lot-detail-field-span">
+                  <strong>입찰제한정보</strong>
+                  <span className="lot-detail-chip-row">
+                    {restrictionTags.map((tag) => <span key={tag} className="lot-detail-chip gray">{tag}</span>)}
+                  </span>
                 </div>
                 <div className="lot-detail-field">
                   <strong>입찰기간</strong>
@@ -1238,9 +1390,10 @@ function normalizeItems(payload, assetType = "realty") {
       distributionDue: item.dtbtRqrEdtmCont || "",
       failedCount: Number(item.usbdNft ?? 0),
       firstNoticeDate: formatOnbidDate(item.frstPbancDt ?? item.frstOpbdDt),
-      noticeDate: formatOnbidDate(item.pbctBegnDt ?? item.pbancDt),
+      noticeDate: formatOnbidDate(item.pbancDt ?? item.pbctBegnDt),
       roadAddress: item.rdnmAdrs || item.roadNmRadr || "",
-      bidMethod: [item.cptnMthodNm, item.bidDivNm].filter(Boolean).join(" / ") || item.bidDivNm || "",
+      bidStyle: formatBidStyle(item),
+      bidMethod: formatBidStyle(item),
       raw: item,
     };
   });
@@ -1711,6 +1864,8 @@ function App() {
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [pageMeta, setPageMeta] = useState(null);
+  const [pageMetaLoading, setPageMetaLoading] = useState(false);
   const [galleryPhotos, setGalleryPhotos] = useState([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [error, setError] = useState("");
@@ -2113,6 +2268,30 @@ function App() {
       cancelled = true;
     };
   }, [selected?.id, selected?.conditionNo, selected?.assetType, data.sample]);
+
+  useEffect(() => {
+    if (!selected || data.sample) {
+      setPageMeta(null);
+      return;
+    }
+
+    let cancelled = false;
+    setPageMetaLoading(true);
+    fetchOnbidPageMeta(selected)
+      .then((nextMeta) => {
+        if (!cancelled) setPageMeta(nextMeta);
+      })
+      .catch(() => {
+        if (!cancelled) setPageMeta(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPageMetaLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id, selected?.conditionNo, selected?.onbidNo, selected?.pbctNo, selected?.noticeNo, data.sample]);
 
   useEffect(() => {
     if (!selected || data.sample || loading) {
@@ -2890,6 +3069,8 @@ function App() {
             <LotDetailPanel
               lot={selected}
               detail={detail}
+              pageMeta={pageMeta}
+              pageMetaLoading={pageMetaLoading}
               detailLoading={detailLoading}
               detailError={detailError}
               photos={displayPhotos}
@@ -3077,6 +3258,8 @@ function App() {
               <LotDetailPanel
                 lot={selected}
                 detail={detail}
+                pageMeta={pageMeta}
+                pageMetaLoading={pageMetaLoading}
                 detailLoading={detailLoading}
                 detailError={detailError}
                 photos={displayPhotos}
