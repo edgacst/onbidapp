@@ -688,6 +688,129 @@ a {
   white-space: pre-wrap;
 }
 
+.board-comments {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e9ee;
+  display: grid;
+  gap: 14px;
+}
+
+.board-comments-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.board-comments-head strong {
+  font-size: 15px;
+  color: #151b23;
+}
+
+.board-comment-tree {
+  display: grid;
+  gap: 12px;
+}
+
+.board-comment {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e4ebf0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.board-comment.is-child {
+  margin-left: 18px;
+  border-left: 3px solid #d7e3f1;
+  background: #fbfdff;
+}
+
+.board-comment-children {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.board-comment-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #60707d;
+  font-size: 12px;
+}
+
+.board-comment-head strong {
+  color: #17324a;
+  font-size: 14px;
+}
+
+.board-comment p {
+  margin: 0;
+  color: #3f4d59;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.board-comment-reply {
+  width: fit-content;
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: #4f5d69;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.board-comment-reply:hover {
+  color: #3530b8;
+}
+
+.board-comment-empty,
+.board-reply-hint {
+  margin: 0;
+  color: #697784;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.board-reply-hint {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f0efff;
+  color: #3530b8;
+  font-weight: 700;
+}
+
+.board-comment-form {
+  display: grid;
+  gap: 10px;
+}
+
+.board-comment-form textarea {
+  width: 100%;
+  border: 1px solid #d7e0e7;
+  border-radius: 8px;
+  background: #fff;
+  color: #151b23;
+  padding: 12px;
+  line-height: 1.55;
+  resize: vertical;
+  outline: 0;
+}
+
+.board-comment-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .board-meta {
   display: flex;
   flex-wrap: wrap;
@@ -2650,6 +2773,10 @@ a {
 
   .board-body {
     padding: 12px 14px;
+  }
+
+  .board-comment.is-child {
+    margin-left: 12px;
   }
 
   .board-status {

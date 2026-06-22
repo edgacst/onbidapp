@@ -20,6 +20,7 @@ import {
   MessageCircleQuestion,
   Navigation,
   RefreshCw,
+  Reply,
   Search,
   ShieldAlert,
   SlidersHorizontal,
@@ -828,6 +829,85 @@ async function fetchOnbidDetail(filters, lot) {
   return normalized;
 }
 
+function getQuestionComments(question) {
+  return Array.isArray(question?.comments) ? question.comments : [];
+}
+
+function getCommentsByParent(comments, parentId = null) {
+  return comments
+    .filter((comment) => (comment.parentId || null) === parentId)
+    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+}
+
+function BoardCommentSection({
+  question,
+  replyingTo,
+  commentDraft,
+  onDraftChange,
+  onSubmit,
+  onReply,
+  onCancelReply,
+}) {
+  const comments = getQuestionComments(question);
+  const isReplyingHere = replyingTo.questionId === question.id;
+  const replyTarget = isReplyingHere
+    ? comments.find((comment) => comment.id === replyingTo.parentId)
+    : null;
+
+  function renderBranch(parentId = null, depth = 0) {
+    return getCommentsByParent(comments, parentId).map((comment) => (
+      <article key={comment.id} className={`board-comment ${depth ? "is-child" : ""}`}>
+        <div className="board-comment-head">
+          <strong>{comment.author}</strong>
+          <span>{comment.createdAt}</span>
+        </div>
+        <p>{comment.body}</p>
+        <button type="button" className="board-comment-reply" onClick={() => onReply(question.id, comment.id)}>
+          <Reply size={14} /> 답글
+        </button>
+        {getCommentsByParent(comments, comment.id).length > 0 && (
+          <div className="board-comment-children">
+            {renderBranch(comment.id, depth + 1)}
+          </div>
+        )}
+      </article>
+    ));
+  }
+
+  return (
+    <section className="board-comments" aria-label="댓글">
+      <div className="board-comments-head">
+        <strong>댓글 {comments.length}</strong>
+        {isReplyingHere && replyingTo.parentId && (
+          <button type="button" className="plain-action" onClick={onCancelReply}>답글 취소</button>
+        )}
+      </div>
+      <div className="board-comment-tree">
+        {comments.length === 0 ? (
+          <p className="board-comment-empty">아직 댓글이 없습니다. 첫 댓글을 남겨보세요.</p>
+        ) : (
+          renderBranch()
+        )}
+      </div>
+      {replyTarget && (
+        <p className="board-reply-hint">{replyTarget.author}님 댓글에 답글을 작성합니다.</p>
+      )}
+      <form className="board-comment-form" onSubmit={(event) => onSubmit(event, question.id)}>
+        <textarea
+          value={commentDraft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          placeholder={replyTarget ? "답글을 입력하세요." : "댓글을 입력하세요."}
+          rows={3}
+          required
+        />
+        <div className="board-comment-form-actions">
+          <button className="primary-action" type="submit">{replyTarget ? "답글 등록" : "댓글 등록"}</button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function App() {
   const [view, setView] = useState("home");
   const [statusFocus, setStatusFocus] = useState("");
@@ -872,6 +952,8 @@ function App() {
   const [boardStatus, setBoardStatus] = useState("all");
   const [boardWriteOpen, setBoardWriteOpen] = useState(false);
   const [openQuestionId, setOpenQuestionId] = useState("");
+  const [replyingTo, setReplyingTo] = useState({ questionId: "", parentId: "" });
+  const [commentDraft, setCommentDraft] = useState("");
   const [questionForm, setQuestionForm] = useState({ title: "", body: "", category: "물건검토" });
   const [questions, setQuestions] = useState(() => {
     try {
@@ -891,6 +973,7 @@ function App() {
         createdAt: "2026.06.21",
         status: "답변대기",
         views: 28,
+        comments: [],
       },
       {
         id: "sample-q-2",
@@ -902,6 +985,29 @@ function App() {
         createdAt: "2026.06.20",
         status: "답변완료",
         views: 41,
+        comments: [
+          {
+            id: "sample-c-2-1",
+            parentId: null,
+            author: "공매도우미",
+            body: "목록 카드 태그와 상세 패널의 입찰 정보에서 공동입찰 가능 여부를 함께 확인할 수 있습니다.",
+            createdAt: "2026.06.20",
+          },
+          {
+            id: "sample-c-2-2",
+            parentId: "sample-c-2-1",
+            author: "온비드초보",
+            body: "상세 패널 어디에 표시되는지 알려주실 수 있을까요?",
+            createdAt: "2026.06.20",
+          },
+          {
+            id: "sample-c-2-3",
+            parentId: "sample-c-2-2",
+            author: "공매도우미",
+            body: "상세 화면 하단 검토 체크 영역과 온비드 원문 링크를 같이 보면 됩니다.",
+            createdAt: "2026.06.21",
+          },
+        ],
       },
       {
         id: "sample-q-1",
@@ -913,6 +1019,15 @@ function App() {
         createdAt: "2026.06.19",
         status: "답변완료",
         views: 36,
+        comments: [
+          {
+            id: "sample-c-1-1",
+            parentId: null,
+            author: "권리분석러",
+            body: "우선 등기사항전부증명서와 감정평가서를 확인하고, 공고문의 면적 표기와 대조하는 순서가 좋습니다.",
+            createdAt: "2026.06.19",
+          },
+        ],
       },
     ];
   });
@@ -928,6 +1043,8 @@ function App() {
 
   useEffect(() => {
     setOpenQuestionId("");
+    setReplyingTo({ questionId: "", parentId: "" });
+    setCommentDraft("");
   }, [boardSearch, boardStatus]);
 
   const sortedLots = useMemo(() => {
@@ -1378,6 +1495,40 @@ function App() {
 
   function toggleQuestion(questionId) {
     setOpenQuestionId((current) => (current === questionId ? "" : questionId));
+    setReplyingTo({ questionId: "", parentId: "" });
+    setCommentDraft("");
+  }
+
+  function startCommentReply(questionId, parentId) {
+    setReplyingTo({ questionId, parentId });
+    setCommentDraft("");
+  }
+
+  function cancelCommentReply() {
+    setReplyingTo({ questionId: "", parentId: "" });
+    setCommentDraft("");
+  }
+
+  function submitComment(event, questionId) {
+    event.preventDefault();
+    const body = commentDraft.trim();
+    if (!body) return;
+    const parentId = replyingTo.questionId === questionId && replyingTo.parentId ? replyingTo.parentId : null;
+    setQuestions((current) => current.map((question) => {
+      if (question.id !== questionId) return question;
+      const comments = [
+        ...(getQuestionComments(question)),
+        {
+          id: `c-${Date.now()}`,
+          parentId,
+          author: member?.name || "비회원",
+          body,
+          createdAt: new Date().toLocaleDateString("ko-KR"),
+        },
+      ];
+      return { ...question, comments };
+    }));
+    cancelCommentReply();
   }
 
   function submitQuestion(event) {
@@ -1396,6 +1547,7 @@ function App() {
         createdAt: new Date().toLocaleDateString("ko-KR"),
         status: "답변대기",
         views: 0,
+        comments: [],
       },
       ...current,
     ]);
@@ -1703,10 +1855,20 @@ function App() {
                       <span>작성자 {question.author}</span>
                       <span>등록일 {question.createdAt}</span>
                       <span>조회 {question.views ?? 0}</span>
+                      <span>댓글 {getQuestionComments(question).length}</span>
                     </div>
                     {isOpen && (
                       <div className="board-body">
                         <p>{question.body}</p>
+                        <BoardCommentSection
+                          question={question}
+                          replyingTo={replyingTo}
+                          commentDraft={commentDraft}
+                          onDraftChange={setCommentDraft}
+                          onSubmit={submitComment}
+                          onReply={startCommentReply}
+                          onCancelReply={cancelCommentReply}
+                        />
                       </div>
                     )}
                   </article>
