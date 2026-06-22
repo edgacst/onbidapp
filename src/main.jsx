@@ -1387,7 +1387,9 @@ function App() {
                     placeholder="물건명, 주소, 물건관리번호"
                     aria-label="빠른검색"
                   />
-                  <button type="submit" aria-label="검색"><Search size={22} /></button>
+                  <button type="submit" disabled={loading} aria-label="검색">
+                    {loading ? <Loader2 className="spin" size={22} /> : <Search size={22} />}
+                  </button>
                 </form>
                 <div className="asset-tabs">
                   {homeAssetTypes.map((item) => {
@@ -1446,7 +1448,10 @@ function App() {
                 </div>
                 {homeAssetType === "car" && <p className="quick-note">차량 목록 API로 자동차·운송장비 물건을 조회합니다.</p>}
                 {homeAssetType === "movable" && <p className="quick-note">동산 목록 API로 기계·기구·물품 공매를 조회합니다.</p>}
-                <button className="home-search-action" type="button" onClick={runQuickSearch}><Search size={18} /> 물건 보기</button>
+                <button className="home-search-action" type="button" onClick={runQuickSearch} disabled={loading}>
+                  {loading ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
+                  {loading ? "검색 중..." : "물건 보기"}
+                </button>
               </div>
 
               <aside className="home-my-panel">
@@ -1799,7 +1804,8 @@ function App() {
           </div>
 
           <button className="search-button" type="submit" disabled={loading}>
-            {loading ? <Loader2 className="spin" size={18} /> : <Search size={18} />} 조회
+            {loading ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
+            {loading ? "검색 중..." : "조회"}
           </button>
             </form>
 
@@ -1982,6 +1988,15 @@ function App() {
           </>
         )}
       </section>
+
+      {loading && (
+        <div className="search-loading-overlay" role="alert" aria-live="assertive" aria-busy="true">
+          <div className="search-loading-card">
+            <Loader2 className="spin" size={36} />
+            <p>검색 중입니다. 잠시만 기다려주세요.</p>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
