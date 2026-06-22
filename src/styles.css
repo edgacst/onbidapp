@@ -650,6 +650,14 @@ a {
   line-height: 1.45;
 }
 
+.board-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
 .board-card-top {
   display: flex;
   align-items: center;
@@ -666,6 +674,7 @@ a {
 }
 
 .board-title {
+  flex: 1;
   min-width: 0;
   border: 0;
   background: transparent;
@@ -675,7 +684,6 @@ a {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  width: 100%;
   cursor: pointer;
 }
 
@@ -691,18 +699,10 @@ a {
 }
 
 .board-body {
-  margin-top: 0;
-  padding: 0;
+  margin-top: 8px;
+  padding: 0 0 0 36px;
   display: grid;
   gap: 10px;
-}
-
-.board-body .board-card-top {
-  margin-top: 2px;
-}
-
-.board-body .board-meta {
-  margin: 0;
 }
 
 .board-body > p {
@@ -846,11 +846,14 @@ a {
 }
 
 .board-meta {
+  flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  color: #60707d;
-  font-size: 13px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+  color: #8a96a0;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .board-status {
@@ -2788,6 +2791,23 @@ a {
 
   .board-card.expanded {
     padding: 14px;
+  }
+
+  .board-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .board-meta {
+    flex-wrap: wrap;
+    white-space: normal;
+    gap: 6px 12px;
+    padding-left: 36px;
+  }
+
+  .board-body {
+    padding-left: 36px;
   }
 
   .board-card-top {

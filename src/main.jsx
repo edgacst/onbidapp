@@ -1835,29 +1835,25 @@ function App() {
                   const isOpen = openQuestionId === question.id;
                   return (
                   <article className={`board-card ${isOpen ? "expanded" : ""}`} key={question.id}>
-                    <button
-                      className="board-title"
-                      type="button"
-                      aria-expanded={isOpen}
-                      onClick={() => toggleQuestion(question.id)}
-                    >
-                      <span className="board-no">{question.number ?? "-"}</span>
-                      <strong>{question.title || question.body}</strong>
-                    </button>
+                    <div className="board-row">
+                      <button
+                        className="board-title"
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={() => toggleQuestion(question.id)}
+                      >
+                        <span className="board-no">{question.number ?? "-"}</span>
+                        <strong>{question.title || question.body}</strong>
+                      </button>
+                      <div className="board-meta">
+                        <span>작성자 {question.author}</span>
+                        <span>등록일 {question.createdAt}</span>
+                        <span>조회 {question.views ?? 0}</span>
+                        <span>댓글 {getQuestionComments(question).length}</span>
+                      </div>
+                    </div>
                     {isOpen && (
                       <div className="board-body">
-                        <div className="board-card-top">
-                          <div className="board-card-tags">
-                            <mark>{question.category || "일반"}</mark>
-                          </div>
-                          <span className={`board-status ${question.status === "답변완료" ? "done" : ""}`}>{question.status}</span>
-                        </div>
-                        <div className="board-meta">
-                          <span>작성자 {question.author}</span>
-                          <span>등록일 {question.createdAt}</span>
-                          <span>조회 {question.views ?? 0}</span>
-                          <span>댓글 {getQuestionComments(question).length}</span>
-                        </div>
                         <p>{question.body}</p>
                         <BoardCommentSection
                           question={question}
