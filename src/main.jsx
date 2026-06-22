@@ -1578,6 +1578,7 @@ function App() {
     const { view: initialView, selectedId: initialSelectedId } = parseAppHash(window.location.hash);
     const inferredAssetType = initialSelectedId ? assetTypeFromLotId(initialSelectedId) : homeAssetType;
 
+    setView(initialView);
     if (initialSelectedId) {
       setSelectedId(initialSelectedId);
       setHomeAssetType(inferredAssetType);
@@ -1587,14 +1588,11 @@ function App() {
       }
     }
 
-    if (!window.history.state?.appView) {
-      window.history.replaceState(
-        { appView: initialView, selectedId: initialSelectedId },
-        "",
-        initialSelectedId ? `#${initialView}-${encodeURIComponent(initialSelectedId)}` : `#${initialView}`,
-      );
-      setView(initialView);
-    }
+    window.history.replaceState(
+      { appView: initialView, selectedId: initialSelectedId },
+      "",
+      initialSelectedId ? `#${initialView}-${encodeURIComponent(initialSelectedId)}` : `#${initialView}`,
+    );
 
     const initialFilters = {
       keyword,
@@ -1612,18 +1610,32 @@ function App() {
     };
     loadLots(initialFilters);
 
-    function handlePopState(event) {
-      const state = event.state || {};
-      setView(state.appView || "home");
-      if (state.selectedId) setSelectedId(state.selectedId);
-      if ((state.appView || "home") !== "search") {
+    function applyRouteFromLocation(state = window.history.state || {}) {
+      const parsed = parseAppHash(window.location.hash);
+      const nextView = state.appView || parsed.view || "home";
+      const nextSelectedId = state.selectedId || parsed.selectedId || "";
+      setView(nextView);
+      if (nextSelectedId) setSelectedId(nextSelectedId);
+      if ((nextView || "home") !== "search") {
         setCheckMode(false);
         setStatusFocus("");
       }
     }
 
+    function handlePopState(event) {
+      applyRouteFromLocation(event.state || {});
+    }
+
+    function handleHashChange() {
+      applyRouteFromLocation(window.history.state || {});
+    }
+
     window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handleHashChange);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("hashchange", handleHashChange);
+    };
   }, []);
 
   useEffect(() => {
