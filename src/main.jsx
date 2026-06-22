@@ -511,32 +511,34 @@ function buildOnbidFileDownloadUrl(meta, atchSn, downloadImageKind = "ORGNL_NM")
 
 const galleryPhotoCache = new Map();
 
+function isImageMagic(bytes) {
+  if (!bytes || bytes.length < 4) return false;
+  if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) return false;
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return true;
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) return true;
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return true;
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return true;
+  return false;
+}
+
 async function probeOnbidPhotoUrl(url) {
-  const isImagePayload = (contentType, size) => {
-    const type = String(contentType || "").toLowerCase();
-    if (type.includes("text/html")) return false;
-    if (type.startsWith("image/")) return size > 10000;
-    if (type.includes("octet-stream") || type.includes("application/download")) return size > 10000;
-    return size > 10000;
-  };
-
-  try {
-    const head = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(PHOTO_PROBE_TIMEOUT_MS) });
-    if (head.ok) {
-      const contentType = head.headers.get("content-type") || "";
-      const size = Number(head.headers.get("content-length") || 0);
-      if (size > 0) return isImagePayload(contentType, size);
-    }
-  } catch {
-    // HEAD 미지원 시 GET으로 확인
-  }
-
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(PHOTO_PROBE_TIMEOUT_MS) });
     if (!response.ok) return false;
-    const contentType = response.headers.get("content-type") || "";
-    const blob = await response.blob();
-    return isImagePayload(contentType, blob.size);
+
+    const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+    if (contentType.includes("text/html")) return false;
+
+    const reader = response.body?.getReader();
+    if (!reader) return false;
+
+    const { value } = await reader.read();
+    await reader.cancel().catch(() => {});
+
+    if (!value || value.length < 4 || !isImageMagic(value)) return false;
+
+    const size = Number(response.headers.get("content-length") || 0);
+    return size > 10000 || value.length >= 4;
   } catch {
     return false;
   }
@@ -546,22 +548,25 @@ async function probeGalleryFromThumbnail(thumbnailUrl) {
   const meta = parseOnbidFileDownloadUrl(thumbnailUrl);
   if (!meta) return [];
 
-  const cacheKey = `${meta.atchFileLstNo}:${meta.hashCrpsNo}`;
+  const cacheKey = `${meta.atchFileLstNo}:${meta.hashCrpsNo}:v2`;
   if (galleryPhotoCache.has(cacheKey)) {
     return galleryPhotoCache.get(cacheKey);
   }
 
   const photos = [];
   for (let atchSn = 1; atchSn <= 20; atchSn += 1) {
-    const url = buildOnbidFileDownloadUrl(meta, atchSn, "ORGNL_NM");
-    if (await probeOnbidPhotoUrl(url)) {
-      photos.push(url);
-      continue;
+    const originalUrl = buildOnbidFileDownloadUrl(meta, atchSn, "ORGNL_NM");
+    const thumbUrl = buildOnbidFileDownloadUrl(meta, atchSn, "THNL_NM");
+    let picked = "";
+
+    if (await probeOnbidPhotoUrl(originalUrl)) {
+      picked = originalUrl;
+    } else if (await probeOnbidPhotoUrl(thumbUrl)) {
+      picked = thumbUrl;
     }
 
-    const thumbUrl = buildOnbidFileDownloadUrl(meta, atchSn, "THNL_NM");
-    if (thumbUrl !== url && await probeOnbidPhotoUrl(thumbUrl)) {
-      photos.push(thumbUrl);
+    if (picked) {
+      photos.push(picked);
       continue;
     }
 
@@ -630,7 +635,7 @@ async function resolveLotPhotosForDisplay(lot, detail) {
   if (fromDetail.length > 1) return [...new Set(fromDetail)];
 
   const fromAttachment = thumbnail ? await probeGalleryFromThumbnail(thumbnail) : [];
-  const merged = [...new Set([...fromAttachment, ...fromDetail, thumbnail].filter(Boolean))];
+  const merged = [...new Set([thumbnail, ...fromAttachment, ...fromDetail].filter(Boolean))];
   if (merged.length) return merged;
 
   return fromDetail.length ? fromDetail : (thumbnail ? [thumbnail] : []);
@@ -784,6 +789,14 @@ function bidRestrictionTags(lot) {
   ].filter(Boolean);
 }
 
+function photoDisplayFallback(url) {
+  if (!url) return "";
+  if (url.includes("downloadImageKind=ORGNL_NM")) {
+    return url.replace("downloadImageKind=ORGNL_NM", "downloadImageKind=THNL_NM");
+  }
+  return "";
+}
+
 function LotDetailPanel({
   lot,
   detail,
@@ -803,15 +816,17 @@ function LotDetailPanel({
   const [usePyeong, setUsePyeong] = useState(false);
   const [activeTab, setActiveTab] = useState("spec");
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [photoFallbacks, setPhotoFallbacks] = useState({});
 
   useEffect(() => {
     setPhotoIndex(0);
+    setPhotoFallbacks({});
     setMediaMode("photo");
   }, [photos, lot?.id]);
 
   const displayPhotos = dedupePhotos(photos);
   const photoCount = displayPhotos.length;
-  const currentPhoto = displayPhotos[photoIndex] || "";
+  const currentPhoto = photoFallbacks[photoIndex] || displayPhotos[photoIndex] || "";
   const propertyTag = raw.prptDivNm || lot.tags[0] || "공매";
   const dispositionTag = raw.dspsMthodNm || lot.tags[1] || "매각";
   const usageTag = lot.subCategory || lot.category || "용도 확인";
@@ -849,6 +864,13 @@ function LotDetailPanel({
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"
+                onError={() => {
+                  const original = displayPhotos[photoIndex];
+                  const fallback = photoDisplayFallback(original);
+                  if (fallback && photoFallbacks[photoIndex] !== fallback) {
+                    setPhotoFallbacks((current) => ({ ...current, [photoIndex]: fallback }));
+                  }
+                }}
               />
             )}
             {mediaMode === "map" && links?.embed && (
