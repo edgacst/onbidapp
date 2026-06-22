@@ -415,89 +415,97 @@ function isOnbidLotId(value) {
 
 function toOnbidFileProxy(url) {
   if (!url || typeof url !== "string") return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("/onbid-file")) return trimmed;
+
   try {
-    const parsed = new URL(url);
-    if (parsed.hostname === "www.onbid.co.kr") {
+    const parsed = new URL(trimmed, "https://www.onbid.co.kr");
+    if (parsed.hostname.endsWith("onbid.co.kr")) {
       return `/onbid-file${parsed.pathname}${parsed.search}`;
     }
   } catch {
-    return url;
+    if (trimmed.startsWith("/")) return `/onbid-file${trimmed}`;
   }
-  return url;
+
+  return trimmed;
 }
 
-function extractThumbnailUrl(source) {
+function extractPhotoUrl(source) {
   if (!source) return "";
   if (typeof source === "string") return toOnbidFileProxy(source);
   return toOnbidFileProxy(
-    source.thnlImgUrlAdr || source.thnlImgUrl || source.urlAdr || source.imgUrl || source.fileUrl || source.atchFileUrl || "",
+    source.potoUrlAdr
+    || source.urlAdr
+    || source.imgUrl
+    || source.thnlImgUrlAdr
+    || source.thnlImgUrl
+    || source.fileUrl
+    || source.atchFileUrl
+    || source.cltrImgUrl
+    || "",
   );
 }
 
-function extractThumbnailFromDetailItem(item) {
-  if (!item || !Object.keys(item).length) return "";
-  const direct = extractThumbnailUrl(item.thnlImgUrlAdr || item.thnlImgUrl || item.urlAdr);
-  if (direct) return direct;
-
-  const firstPhoto = asArray(item?.potoUrlList?.item ?? item?.potoUrlList)[0];
-  return extractThumbnailUrl(firstPhoto);
+function isLikelyImageUrl(url) {
+  const lower = String(url || "").toLowerCase();
+  if (!lower) return false;
+  if (/\.(mp4|m3u8|mov|wmv|avi)(\?|$)/.test(lower)) return false;
+  if (/(?:^|[/?&])(vdo|video|360|lrm|lmap)(?:[/?&]|$)/.test(lower)) return false;
+  return true;
 }
 
-function resolveLotThumbnail(lot, detail) {
-  const fromLot = extractThumbnailUrl(lot?.thumbnail);
-  if (fromLot) return fromLot;
-  return detail?.thumbnail || extractThumbnailFromDetailItem(detail?.item);
+function collectDetailPhotos(item) {
+  if (!item || !Object.keys(item).length) return [];
+
+  const buckets = [
+    item.potoUrlList,
+    item.photoList,
+    item.picList,
+    item.imgList,
+    item.cltrImgList,
+    item.potoList,
+    item.cltrPotoList,
+  ];
+
+  const photos = [];
+  for (const bucket of buckets) {
+    for (const entry of asArray(bucket?.item ?? bucket)) {
+      const url = extractPhotoUrl(entry);
+      if (url && isLikelyImageUrl(url)) photos.push(url);
+    }
+  }
+
+  const thumbnail = extractPhotoUrl(item.thnlImgUrlAdr || item.thnlImgUrl || item.urlAdr);
+  if (thumbnail && !photos.includes(thumbnail)) photos.unshift(thumbnail);
+
+  return [...new Set(photos)];
+}
+
+function resolveLotPhotos(lot, detail) {
+  const photos = [...(detail?.photos || [])];
+  const listThumb = extractPhotoUrl(lot?.thumbnail);
+  if (listThumb && !photos.includes(listThumb)) photos.unshift(listThumb);
+  return photos;
 }
 
 function AuctionImage({ src, fallbackSrc = "", alt, className = "" }) {
   const sources = [src, fallbackSrc].filter(Boolean).filter((url, index, urls) => urls.indexOf(url) === index);
   const [sourceIndex, setSourceIndex] = useState(0);
-  const [displaySrc, setDisplaySrc] = useState("");
   const currentSrc = sources[sourceIndex] || "";
-
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl = "";
-    setDisplaySrc("");
-
-    if (!currentSrc) return undefined;
-
-    if (!currentSrc.startsWith("/onbid-file")) {
-      setDisplaySrc(currentSrc);
-      return undefined;
-    }
-
-    fetch(currentSrc)
-      .then((response) => {
-        if (!response.ok) throw new Error(`image ${response.status}`);
-        return response.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setDisplaySrc(objectUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setSourceIndex((index) => index + 1);
-      });
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [currentSrc]);
 
   useEffect(() => {
     setSourceIndex(0);
   }, [src, fallbackSrc]);
 
-  if (!currentSrc) return <div className={className ? `${className} image-empty` : "image-empty"}>사진 없음</div>;
-  if (!displaySrc) return <div className={className ? `${className} image-empty loading` : "image-empty loading"}>사진 불러오는 중</div>;
+  if (!currentSrc || sourceIndex >= sources.length) {
+    return <div className={className ? `${className} image-empty` : "image-empty"}>사진 없음</div>;
+  }
 
   return (
     <img
       className={className}
-      src={displaySrc}
+      src={currentSrc}
       alt={alt}
       loading="lazy"
       decoding="async"
@@ -555,7 +563,7 @@ function normalizeItems(payload, assetType = "realty") {
         item.collbBidPsblYn === "Y" ? "공동입찰 가능" : "",
       ].filter(Boolean),
       note: item.evcRsbyTrgtCont ? `인도인수책임: ${item.evcRsbyTrgtCont}` : "권리관계와 공고문은 온비드 원문에서 확인하세요.",
-      thumbnail: extractThumbnailUrl(item.thnlImgUrlAdr || item.thnlImgUrl || item.urlAdr || ""),
+      thumbnail: extractPhotoUrl(item.thnlImgUrlAdr || item.thnlImgUrl || item.urlAdr || ""),
       landArea: Number(item.landSqms ?? 0),
       buildingArea: Number(item.bldSqms ?? 0),
       shareYn: item.alcYn || "",
@@ -616,7 +624,7 @@ function normalizeResultItems(payload, assetType = "realty") {
         item.vldBddrNope != null ? `유효입찰 ${item.vldBddrNope}명` : "",
       ].filter(Boolean),
       note: `입찰결과 목록 API 기준 ${status} 물건입니다. 낙찰가와 개찰일시는 원문에서 최종 확인하세요.`,
-      thumbnail: extractThumbnailUrl(item.thnlImgUrlAdr || item.thnlImgUrl || item.urlAdr || ""),
+      thumbnail: extractPhotoUrl(item.thnlImgUrlAdr || item.thnlImgUrl || item.urlAdr || ""),
       landArea: Number(item.landSqms ?? 0),
       buildingArea: Number(item.bldSqms ?? 0),
       shareYn: item.alcYn || "",
@@ -630,10 +638,12 @@ function normalizeResultItems(payload, assetType = "realty") {
 function normalizeDetail(payload) {
   const body = payload?.response?.body ?? payload?.body ?? {};
   const item = asArray(body?.items?.item ?? body?.items)[0] ?? body?.item ?? {};
+  const photos = collectDetailPhotos(item);
 
   return {
     item,
-    thumbnail: extractThumbnailFromDetailItem(item),
+    photos,
+    thumbnail: photos[0] || "",
     appraisals: asArray(item?.apslEvlClgList?.item ?? item?.apslEvlClgList ?? item?.apslEvlList?.item),
     areas: asArray(item?.areaDtlList?.item ?? item?.areaDtlList ?? item?.rlstAreaList?.item),
   };
@@ -1168,7 +1178,7 @@ function App() {
         }
       : sortedLots[0]);
   const links = selected ? mapLinks(selected) : null;
-  const displayThumbnail = selected ? resolveLotThumbnail(selected, detail) : "";
+  const displayPhotos = selected ? resolveLotPhotos(selected, detail) : [];
   const totalMinimum = sortedLots.reduce((sum, lot) => sum + (lot.minimum ?? 0), 0);
   const averageDiscount = Math.round(sortedLots.reduce((sum, lot) => sum + lot.discount, 0) / sortedLots.length || 0);
   const visibleTotal = statusFocus || checkMode || view === "watch" ? sortedLots.length : data.totalCount || sortedLots.length;
@@ -2107,11 +2117,10 @@ function App() {
             <button className="back-button" onClick={() => openView("search")}>목록으로</button>
             <article className="detail-panel detail-page-panel">
               <div className="photo-strip">
-                {displayThumbnail ? (
-                  <AuctionImage src={displayThumbnail} alt={`${selected.title} 썸네일`} />
-                ) : (
-                  <div className="photo-empty">사진 없음</div>
-                )}
+                {displayPhotos.map((src, index) => (
+                  <AuctionImage key={`${src}-${index}`} src={src} alt={`${selected.title} 사진 ${index + 1}`} />
+                ))}
+                {!displayPhotos.length && <div className="photo-empty">사진 없음</div>}
               </div>
 
               <div className="detail-head">
@@ -2159,9 +2168,10 @@ function App() {
               <div className="analysis-box">
                 <strong>상세 정보</strong>
                 {detailLoading && <p>물건상세 조회 중입니다.</p>}
-                {detailError && <p>상세 API 권한이 없어 목록 데이터 기준으로 표시 중입니다. 상세 서비스 승인 후 감정평가, 면적상세가 확장됩니다.</p>}
+                {detailError && <p>상세 API 권한이 없어 목록 데이터 기준으로 표시 중입니다. 상세 서비스 승인 후 사진목록, 감정평가, 면적상세가 확장됩니다.</p>}
                 {!detailLoading && !detailError && detail && (
                   <div className="detail-extra">
+                    <span>사진 {displayPhotos.length}건</span>
                     <span>감정평가 {detail.appraisals.length}건</span>
                     <span>면적상세 {detail.areas.length}건</span>
                   </div>
@@ -2348,11 +2358,10 @@ function App() {
           {selected && (
             <aside className="detail-panel">
               <div className="photo-strip">
-                {displayThumbnail ? (
-                  <AuctionImage src={displayThumbnail} alt={`${selected.title} 썸네일`} />
-                ) : (
-                  <div className="photo-empty">사진 없음</div>
-                )}
+                {displayPhotos.map((src, index) => (
+                  <AuctionImage key={`${src}-${index}`} src={src} alt={`${selected.title} 사진 ${index + 1}`} />
+                ))}
+                {!displayPhotos.length && <div className="photo-empty">사진 없음</div>}
               </div>
 
               <div className="detail-head">
@@ -2400,9 +2409,10 @@ function App() {
               <div className="analysis-box">
                 <strong>상세 정보</strong>
                 {detailLoading && <p>물건상세 조회 중입니다.</p>}
-                {detailError && <p>{detailError} 상세 서비스까지 승인되면 감정평가, 면적상세가 더 확장됩니다.</p>}
+                {detailError && <p>{detailError} 상세 서비스까지 승인되면 사진목록, 감정평가, 면적상세가 더 확장됩니다.</p>}
                 {!detailLoading && !detailError && detail && (
                   <div className="detail-extra">
+                    <span>사진 {displayPhotos.length}건</span>
                     <span>감정평가 {detail.appraisals.length}건</span>
                     <span>면적상세 {detail.areas.length}건</span>
                   </div>

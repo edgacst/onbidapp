@@ -36,8 +36,11 @@ export default defineConfig(({ mode }) => {
           target: "https://www.onbid.co.kr",
           changeOrigin: true,
           configure: (proxy) => {
+            proxy.on("proxyReq", (proxyReq) => {
+              proxyReq.setHeader("Referer", "https://www.onbid.co.kr/");
+              proxyReq.setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
+            });
             proxy.on("proxyRes", (proxyRes) => {
-              proxyRes.headers["content-type"] = "image/jpeg";
               delete proxyRes.headers["content-disposition"];
               proxyRes.headers["cache-control"] = "public, max-age=3600";
             });
