@@ -45,6 +45,8 @@ app.use(
       proxyReq.setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
     },
     onProxyRes(proxyRes, req) {
+      delete proxyRes.headers["x-frame-options"];
+      delete proxyRes.headers["content-security-policy"];
       delete proxyRes.headers["content-disposition"];
       proxyRes.headers["cache-control"] = "public, max-age=3600";
       const requestPath = req?.url || "";
@@ -57,6 +59,47 @@ app.use(
     },
   }),
 );
+
+app.get("/onbid-embed/detail", async (req, res) => {
+  const required = ["cltrPrptDivCd", "cltrScrnGrpCd", "onbidCltrno", "pbctCdtnNo", "pbctNo"];
+  if (required.some((key) => !String(req.query[key] || "").trim())) {
+    res.status(400).type("text/plain; charset=utf-8").send("온비드 상세 조회에 필요한 파라미터가 없습니다.");
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(req.query)) {
+      if (typeof value === "string" && value.trim()) params.set(key, value.trim());
+    }
+
+    const target = `https://www.onbid.co.kr/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do?${params.toString()}`;
+    const response = await fetch(target, {
+      headers: {
+        Referer: "https://www.onbid.co.kr/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml",
+      },
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!response.ok) {
+      res.status(response.status).type("text/plain; charset=utf-8").send("온비드 상세 페이지를 불러오지 못했습니다.");
+      return;
+    }
+
+    let html = await response.text();
+    if (!/<base\b/i.test(html)) {
+      html = html.replace(/<head([^>]*)>/i, '<head$1><base href="https://www.onbid.co.kr/">');
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.send(html);
+  } catch (error) {
+    res.status(502).type("text/plain; charset=utf-8").send(error instanceof Error ? error.message : "온비드 상세 로드 실패");
+  }
+});
 
 if (existsSync(distPath)) {
   app.use(

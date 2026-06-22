@@ -427,6 +427,20 @@ function onbidDetailUrl(lot) {
   return `https://www.onbid.co.kr/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do?${query.toString()}`;
 }
 
+function onbidDetailEmbedUrl(lot) {
+  if (!lot?.onbidNo || !lot?.conditionNo || !lot?.pbctNo) return "";
+  const screen = onbidDetailScreen(lot);
+  const query = new URLSearchParams({
+    cltrPrptDivCd: screen.cltrPrptDivCd,
+    cltrScrnGrpCd: screen.cltrScrnGrpCd,
+    onbidCltrno: String(lot.onbidNo),
+    pbctCdtnNo: String(lot.conditionNo),
+    pbctNo: String(lot.pbctNo),
+  });
+  if (lot.noticeNo) query.set("onbidPbancNo", String(lot.noticeNo));
+  return `/onbid-embed/detail?${query.toString()}`;
+}
+
 function assetTypeFromLotId(id) {
   const text = String(id || "");
   if (/-0500-/.test(text)) return "car";
@@ -508,15 +522,19 @@ function buildOnbidFileDownloadUrl(meta, atchSn, downloadImageKind = "ORGNL_NM")
 const galleryPhotoCache = new Map();
 
 async function probeOnbidPhotoUrl(url) {
+  const isImageType = (contentType) => {
+    const type = String(contentType || "").toLowerCase();
+    return type.startsWith("image/") && !type.includes("text/html");
+  };
+
   try {
     const head = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(PHOTO_PROBE_TIMEOUT_MS) });
     if (head.ok) {
       const contentType = head.headers.get("content-type") || "";
-      if (!contentType.includes("text/html")) {
-        const size = Number(head.headers.get("content-length") || 0);
-        if (size > 10000) return true;
-        if (size > 0) return false;
-      }
+      if (!isImageType(contentType)) return false;
+      const size = Number(head.headers.get("content-length") || 0);
+      if (size > 10000) return true;
+      if (size > 0) return false;
     }
   } catch {
     // HEAD 미지원 시 GET으로 확인
@@ -526,7 +544,7 @@ async function probeOnbidPhotoUrl(url) {
     const response = await fetch(url, { signal: AbortSignal.timeout(PHOTO_PROBE_TIMEOUT_MS) });
     if (!response.ok) return false;
     const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("text/html")) return false;
+    if (!isImageType(contentType)) return false;
     const blob = await response.blob();
     return blob.size > 10000;
   } catch {
@@ -610,18 +628,22 @@ function resolveLotPhotos(lot, detail) {
 
 async function resolveLotPhotosForDisplay(lot, detail) {
   const fromDetail = resolveLotPhotos(lot, detail);
-  if (fromDetail.length > 1) return fromDetail;
+  if (fromDetail.length > 1) return [...new Set(fromDetail)];
 
   const thumbnail = extractPhotoUrl(lot?.thumbnail);
   if (!thumbnail) return fromDetail;
 
   const fromAttachment = await probeGalleryFromThumbnail(thumbnail);
-  if (fromAttachment.length) return fromAttachment;
+  if (fromAttachment.length) return [...new Set(fromAttachment)];
 
   return fromDetail.length ? fromDetail : [thumbnail];
 }
 
-function AuctionImage({ src, fallbackSrc = "", alt, className = "" }) {
+function dedupePhotos(photos) {
+  return [...new Set(photos.filter(Boolean))];
+}
+
+function AuctionImage({ src, fallbackSrc = "", alt, className = "", showEmptyLabel = true }) {
   const sources = [src, fallbackSrc].filter(Boolean).filter((url, index, urls) => urls.indexOf(url) === index);
   const [sourceIndex, setSourceIndex] = useState(0);
   const currentSrc = sources[sourceIndex] || "";
@@ -631,6 +653,7 @@ function AuctionImage({ src, fallbackSrc = "", alt, className = "" }) {
   }, [src, fallbackSrc]);
 
   if (!currentSrc || sourceIndex >= sources.length) {
+    if (!showEmptyLabel) return null;
     return <div className={className ? `${className} image-empty` : "image-empty"}>사진 없음</div>;
   }
 
@@ -647,31 +670,80 @@ function AuctionImage({ src, fallbackSrc = "", alt, className = "" }) {
   );
 }
 
+function OnbidDetailEmbed({ lot }) {
+  const embedUrl = onbidDetailEmbedUrl(lot);
+  if (!embedUrl) {
+    return (
+      <section className="onbid-detail-embed">
+        <div className="onbid-detail-embed-head">
+          <strong>온비드 공고 원문</strong>
+        </div>
+        <p className="muted">물건 식별 정보가 부족해 온비드 상세를 불러오지 못했습니다.</p>
+        <a className="secondary-action" href={onbidSearchUrl(lot)} target="_blank" rel="noreferrer">
+          온비드에서 검색 <ExternalLink size={14} />
+        </a>
+      </section>
+    );
+  }
+
+  return (
+    <section className="onbid-detail-embed">
+      <div className="onbid-detail-embed-head">
+        <strong>온비드 공고 원문</strong>
+        <a href={onbidDetailUrl(lot)} target="_blank" rel="noreferrer">
+          새 창에서 보기 <ExternalLink size={14} />
+        </a>
+      </div>
+      <iframe
+        title={`${lot.title} 온비드 상세`}
+        src={embedUrl}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+      />
+    </section>
+  );
+}
+
 function PhotoGallery({ photos, loading, title }) {
+  const [validPhotos, setValidPhotos] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
+    setValidPhotos(dedupePhotos(photos));
     setActiveIndex(0);
   }, [photos]);
 
-  const activePhoto = photos[activeIndex] || "";
+  const dropPhoto = (index) => {
+    setValidPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index));
+    setActiveIndex((current) => {
+      if (index < current) return current - 1;
+      if (index === current) return 0;
+      return current;
+    });
+  };
+
+  const activePhoto = validPhotos[activeIndex] || "";
 
   return (
     <section className="photo-gallery" aria-label="물건 사진">
-      {loading && photos.length === 0 && (
+      {loading && validPhotos.length === 0 && (
         <div className="photo-gallery-empty loading">사진 불러오는 중</div>
-      )}
-      {!loading && photos.length === 0 && (
-        <div className="photo-gallery-empty">사진 없음</div>
       )}
       {activePhoto && (
         <div className="photo-gallery-main">
-          <AuctionImage src={activePhoto} alt={`${title} 사진 ${activeIndex + 1}`} />
+          <img
+            src={activePhoto}
+            alt={`${title} 사진 ${activeIndex + 1}`}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={() => dropPhoto(activeIndex)}
+          />
         </div>
       )}
-      {photos.length > 1 && (
+      {validPhotos.length > 1 && (
         <div className="photo-gallery-thumbs">
-          {photos.map((src, index) => (
+          {validPhotos.map((src, index) => (
             <button
               key={`${src}-${index}`}
               type="button"
@@ -679,13 +751,20 @@ function PhotoGallery({ photos, loading, title }) {
               aria-label={`${title} 사진 ${index + 1} 보기`}
               onClick={() => setActiveIndex(index)}
             >
-              <AuctionImage src={src} alt="" />
+              <img
+                src={src}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                referrerPolicy="no-referrer"
+                onError={() => dropPhoto(index)}
+              />
             </button>
           ))}
         </div>
       )}
-      {!loading && photos.length > 0 && (
-        <p className="photo-gallery-count">사진 {activeIndex + 1} / {photos.length}</p>
+      {!loading && validPhotos.length > 0 && (
+        <p className="photo-gallery-count">사진 {activeIndex + 1} / {validPhotos.length}</p>
       )}
     </section>
   );
@@ -2394,18 +2473,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="analysis-box">
-                <strong>상세 정보</strong>
-                {detailLoading && <p>물건상세 조회 중입니다.</p>}
-                {detailError && <p>상세 API 권한이 없어 목록 데이터 기준으로 표시 중입니다. 상세 서비스 승인 후 사진목록, 감정평가, 면적상세가 확장됩니다.</p>}
-                {!detailLoading && !detailError && detail && (
-                  <div className="detail-extra">
-                    <span>사진 {displayPhotos.length}건</span>
-                    <span>감정평가 {detail.appraisals.length}건</span>
-                    <span>면적상세 {detail.areas.length}건</span>
-                  </div>
-                )}
-              </div>
+              <OnbidDetailEmbed lot={selected} />
 
               <div className="action-row">
                 <a className="secondary-action" href={onbidDetailUrl(selected)} target="_blank" rel="noreferrer">온비드 상세 보기 <ExternalLink size={16} /></a>
@@ -2630,18 +2698,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="analysis-box">
-                <strong>상세 정보</strong>
-                {detailLoading && <p>물건상세 조회 중입니다.</p>}
-                {detailError && <p>{detailError} 상세 서비스까지 승인되면 사진목록, 감정평가, 면적상세가 더 확장됩니다.</p>}
-                {!detailLoading && !detailError && detail && (
-                  <div className="detail-extra">
-                    <span>사진 {displayPhotos.length}건</span>
-                    <span>감정평가 {detail.appraisals.length}건</span>
-                    <span>면적상세 {detail.areas.length}건</span>
-                  </div>
-                )}
-              </div>
+              <OnbidDetailEmbed lot={selected} />
 
               <div className="action-row">
                 <a className="secondary-action" href={onbidDetailUrl(selected)} target="_blank" rel="noreferrer">온비드 상세 보기 <ExternalLink size={16} /></a>
