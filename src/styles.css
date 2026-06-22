@@ -518,6 +518,27 @@ a {
   line-height: 1.45;
 }
 
+.board-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.board-write-button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #5a56e8, #3b82f6);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .board-search {
   min-width: 280px;
   min-height: 42px;
@@ -686,6 +707,61 @@ a {
 
 .board-empty p {
   margin: 0;
+}
+
+.board-write-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.board-write-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(10, 22, 34, 0.42);
+  backdrop-filter: blur(2px);
+}
+
+.board-write-panel {
+  position: relative;
+  z-index: 1;
+  width: min(560px, 100%);
+  max-height: min(90vh, 760px);
+  overflow: auto;
+  border: 1px solid #dfe6eb;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 35, 55, 0.22);
+  padding: 22px;
+}
+
+.board-write-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.board-write-head h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.board-write-head p {
+  margin: 6px 0 0;
+  color: #697784;
+  line-height: 1.45;
+}
+
+.board-write-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .question-form {
@@ -2503,6 +2579,17 @@ a {
   .board-search {
     min-width: 0;
     width: 100%;
+  }
+
+  .board-toolbar-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .board-write-button {
+    width: 100%;
+    justify-content: center;
   }
 
   .board-tabs {
