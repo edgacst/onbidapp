@@ -5,10 +5,13 @@ import {
   Bell,
   Building2,
   CalendarDays,
+  CheckCircle2,
   ChevronRight,
+  ChevronLeft,
   Clock3,
   Download,
   ExternalLink,
+  FileText,
   Filter,
   Gavel,
   Heart,
@@ -21,6 +24,7 @@ import {
   Navigation,
   RefreshCw,
   Search,
+  Share2,
   ShieldAlert,
   SlidersHorizontal,
   SquarePen,
@@ -722,6 +726,396 @@ function PhotoGallery({ photos, loading, title }) {
   );
 }
 
+function formatFullMoney(value, emptyText = "-") {
+  if (value == null || value === "") return emptyText;
+  const numeric = Number(String(value).replace(/[^\d.]/g, ""));
+  if (!numeric) return emptyText;
+  return `${numeric.toLocaleString("ko-KR")}원`;
+}
+
+function formatAreaMetric(value, usePyeong = false, emptyText = "-") {
+  const numeric = Number(value);
+  if (!numeric) return emptyText;
+  if (usePyeong) return `${(numeric * 0.3025).toFixed(1)}평`;
+  return `${numeric.toLocaleString("ko-KR")}m²`;
+}
+
+function buildAreaRows(lot, detail) {
+  const fromDetail = asArray(detail?.areas).map((entry) => ({
+    usage: entry.cltrUsgNm || entry.usgNm || entry.areaDivNm || entry.usgDivNm || "면적",
+    area: Number(entry.areaSqms ?? entry.sqms ?? entry.area ?? 0),
+    share: entry.alcCntnt || entry.shrCntnt || "-",
+    note: entry.rmrkCntnt || entry.rmrk || "-",
+  })).filter((row) => row.area > 0);
+
+  if (fromDetail.length) return fromDetail;
+
+  const rows = [];
+  if (lot.buildingArea) rows.push({ usage: "건물(건물)", area: lot.buildingArea, share: "-", note: "-" });
+  if (lot.landArea) rows.push({ usage: "토지(대)", area: lot.landArea, share: "-", note: "-" });
+  const etcArea = Number(lot.raw?.etcSqms ?? lot.raw?.etcAreaSqms ?? 0);
+  if (etcArea) rows.push({ usage: "기타(제시외)", area: etcArea, share: "-", note: "-" });
+  return rows;
+}
+
+function lotCapabilityTags(lot) {
+  const raw = lot?.raw || {};
+  return [
+    raw.collbBidPsblYn === "Y" ? "공동입찰가능" : "",
+    raw.agntBidPsblYn === "Y" || raw.prxyBidPsblYn === "Y" ? "대리입찰가능" : "",
+    raw.scndRnkAplyPsblYn === "Y" ? "차순위 신청가능" : "",
+    lot.tags.includes("공동입찰 가능") ? "공동입찰가능" : "",
+  ].filter(Boolean).filter((tag, index, tags) => tags.indexOf(tag) === index);
+}
+
+function bidRestrictionTags(lot) {
+  const raw = lot?.raw || {};
+  return [
+    "1인 이상의 유효한 입찰",
+    raw.smlCltrReBidPsblYn === "Y" ? "동일물건 2회 이상 입찰가능" : "",
+    raw.sameIpBidPsblYn === "Y" ? "동일IP 중복입찰가능" : "",
+  ].filter(Boolean);
+}
+
+function LotDetailPanel({
+  lot,
+  detail,
+  detailLoading,
+  detailError,
+  photos,
+  galleryLoading,
+  links,
+  isSaved,
+  onToggleSaved,
+  onBidCheck,
+  layout = "page",
+}) {
+  const raw = lot?.raw || {};
+  const detailItem = detail?.item || {};
+  const [mediaMode, setMediaMode] = useState("photo");
+  const [usePyeong, setUsePyeong] = useState(false);
+  const [activeTab, setActiveTab] = useState("spec");
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [validPhotos, setValidPhotos] = useState([]);
+
+  useEffect(() => {
+    setValidPhotos(dedupePhotos(photos));
+    setPhotoIndex(0);
+    setMediaMode("photo");
+  }, [photos, lot?.id]);
+
+  const dropPhoto = (index) => {
+    setValidPhotos((current) => current.filter((_, photoIdx) => photoIdx !== index));
+    setPhotoIndex((current) => {
+      if (index < current) return current - 1;
+      if (index === current) return 0;
+      return current;
+    });
+  };
+
+  const photoCount = validPhotos.length;
+  const currentPhoto = validPhotos[photoIndex] || "";
+  const propertyTag = raw.prptDivNm || lot.tags[0] || "공매";
+  const dispositionTag = raw.dspsMthodNm || lot.tags[1] || "매각";
+  const usageTag = lot.subCategory || lot.category || "용도 확인";
+  const roundLeft = String(raw.pbctNsq || lot.round || "-").padStart(3, "0");
+  const roundRight = String(lot.conditionNo || raw.pbctCdtnNo || "-").slice(-3).padStart(3, "0");
+  const areaRows = buildAreaRows(lot, detail);
+  const capabilityTags = lotCapabilityTags(lot);
+  const restrictionTags = bidRestrictionTags(lot);
+  const roadAddress = lot.roadAddress || detailItem.rdnmAdrs || raw.rdnmAdrs || "-";
+  const lotAddress = lot.address || lot.title;
+  const isSeized = /압류/.test(propertyTag);
+  const statusLabel = statusGroup(lot) === "ready" ? "입찰시작 전" : lot.status;
+  const deptLine = [raw.chrgDeptNm || raw.dpslDeptNm, raw.chrgTelno || raw.telNo].filter(Boolean).join(" / ");
+  const onbidUrl = onbidDetailUrl(lot);
+
+  const detailTabs = [
+    { id: "spec", label: "세부정보" },
+    { id: "seized", label: "압류재산정보" },
+    { id: "bid", label: "입찰정보" },
+    { id: "market", label: "인근 시세 및 낙찰 사례" },
+  ];
+
+  return (
+    <article className={`lot-detail-panel lot-detail-panel--${layout}`}>
+      <div className="lot-detail-hero">
+        <div className="lot-detail-hero-media">
+          <div className="lot-detail-media-stage">
+            {galleryLoading && photoCount === 0 && mediaMode === "photo" && (
+              <div className="lot-detail-media-empty loading">사진 불러오는 중</div>
+            )}
+            {mediaMode === "photo" && currentPhoto && (
+              <img
+                src={currentPhoto}
+                alt={`${lot.title} 사진 ${photoIndex + 1}`}
+                loading="lazy"
+                decoding="async"
+                referrerPolicy="no-referrer"
+                onError={() => dropPhoto(photoIndex)}
+              />
+            )}
+            {mediaMode === "map" && links?.embed && (
+              <iframe title={`${lot.title} 위치도`} src={links.embed} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+            )}
+            {mediaMode === "photo" && !galleryLoading && !currentPhoto && (
+              <div className="lot-detail-media-empty">등록된 사진이 없습니다.</div>
+            )}
+          </div>
+          <div className="lot-detail-media-tabs">
+            <button type="button" className={mediaMode === "photo" ? "active" : ""} onClick={() => setMediaMode("photo")}>사진</button>
+            <button type="button" className={mediaMode === "map" ? "active" : ""} onClick={() => setMediaMode("map")}>위치도</button>
+          </div>
+          {mediaMode === "photo" && photoCount > 0 && (
+            <div className="lot-detail-media-pager">
+              <button type="button" aria-label="이전 사진" disabled={photoIndex <= 0} onClick={() => setPhotoIndex((index) => Math.max(0, index - 1))}>
+                <ChevronLeft size={18} />
+              </button>
+              <span>{photoIndex + 1} / {photoCount}</span>
+              <button type="button" aria-label="다음 사진" disabled={photoIndex >= photoCount - 1} onClick={() => setPhotoIndex((index) => Math.min(photoCount - 1, index + 1))}>
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="lot-detail-hero-info">
+          <div className="lot-detail-tags">
+            <span className="lot-detail-tag green">{propertyTag}</span>
+            <span className="lot-detail-tag blue">{dispositionTag}</span>
+            <span className="lot-detail-tag purple">{usageTag}</span>
+          </div>
+
+          <div className="lot-detail-title-row">
+            <div>
+              <p className="lot-detail-id">{lot.id}</p>
+              <h2>{lot.title}</h2>
+            </div>
+            <div className="lot-detail-title-actions">
+              <button type="button" className="icon-button" aria-label="관심 물건 저장" onClick={onToggleSaved}>
+                <Heart size={19} fill={isSaved ? "currentColor" : "none"} />
+              </button>
+            </div>
+          </div>
+
+          <div className="lot-detail-quick-actions">
+            <a href={links?.kakao} target="_blank" rel="noreferrer">상권분석</a>
+            <a href={onbidUrl} target="_blank" rel="noreferrer">등기열람하기</a>
+            <a href={links?.kakao} target="_blank" rel="noreferrer">지도</a>
+            <a className="primary" href={onbidUrl} target="_blank" rel="noreferrer">공고보기</a>
+          </div>
+
+          <div className="lot-detail-spec-grid">
+            <div className="lot-detail-spec-item">
+              <span>물건종류</span>
+              <strong>{propertyTag}</strong>
+            </div>
+            <div className="lot-detail-spec-item span-2">
+              <span>
+                면적
+                <button type="button" className={`lot-detail-unit-toggle ${usePyeong ? "active" : ""}`} onClick={() => setUsePyeong((value) => !value)}>평</button>
+              </span>
+              <strong>
+                {lot.landArea ? `토지 ${formatAreaMetric(lot.landArea, usePyeong, "")}` : ""}
+                {lot.landArea && lot.buildingArea ? ", " : ""}
+                {lot.buildingArea ? `건물 ${formatAreaMetric(lot.buildingArea, usePyeong, "")}` : ""}
+                {!lot.landArea && !lot.buildingArea ? "-" : ""}
+              </strong>
+            </div>
+            <div className="lot-detail-spec-item span-2">
+              <span>입찰방식</span>
+              <strong>{lot.bidMethod || lot.tags[2] || "-"}</strong>
+            </div>
+            <div className="lot-detail-spec-item">
+              <span>감정평가금액(원)</span>
+              <strong>{formatFullMoney(lot.appraised)}</strong>
+            </div>
+            <div className="lot-detail-spec-item">
+              <span>배분요구종기</span>
+              <strong>{lot.distributionDue || "-"}</strong>
+            </div>
+            <div className="lot-detail-spec-item span-2 bid-period">
+              <span>입찰기간</span>
+              <div>
+                <em className={`lot-detail-status ${statusClass(lot.status)}`}>{statusLabel}</em>
+                <strong>{lot.starts || "-"} ~ {lot.ends || "-"}</strong>
+              </div>
+            </div>
+            <div className="lot-detail-spec-item">
+              <span>회차</span>
+              <strong>{roundLeft} / {roundRight}</strong>
+            </div>
+            <div className="lot-detail-spec-item highlight">
+              <span>최저입찰가(원)</span>
+              <strong>{formatFullMoney(lot.minimum)}</strong>
+            </div>
+            <div className="lot-detail-spec-item">
+              <span>최초공고일자</span>
+              <strong>{lot.firstNoticeDate || "-"}</strong>
+            </div>
+            <div className="lot-detail-spec-item">
+              <span>유찰횟수</span>
+              <strong>{lot.failedCount ?? 0}회</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section className="lot-detail-meta-card">
+        <ul>
+          <li><strong>공고기관</strong><span>{lot.agency || "-"}</span></li>
+          <li><strong>담당지점</strong><span>{deptLine || "온비드 원문 확인"}</span></li>
+          <li><strong>공매기관</strong><span>{lot.requestAgency || lot.agency || "-"}</span></li>
+          <li>
+            <strong>공고종류</strong>
+            <span className="lot-detail-inline-tag">{raw.pbancDivNm || raw.pbancTypeNm || "일반공고"}</span>
+          </li>
+          <li><strong>공고일자</strong><span>{lot.noticeDate || "-"}</span></li>
+        </ul>
+        {capabilityTags.length > 0 && (
+          <div className="lot-detail-chip-row">
+            {capabilityTags.map((tag) => <span key={tag} className="lot-detail-chip blue">{tag}</span>)}
+          </div>
+        )}
+        {restrictionTags.length > 0 && (
+          <div className="lot-detail-chip-row">
+            {restrictionTags.map((tag) => <span key={tag} className="lot-detail-chip gray">{tag}</span>)}
+          </div>
+        )}
+        {(detail?.appraisals?.length > 0 || onbidUrl) && (
+          <div className="lot-detail-doc-links">
+            <a href={onbidUrl} target="_blank" rel="noreferrer"><FileText size={16} /> 감정평가서</a>
+          </div>
+        )}
+      </section>
+
+      {isSeized && (
+        <div className="lot-detail-warning">
+          <p>※ 해당 재산은 압류재산입니다. 입찰전 주의사항을 반드시 확인하세요.</p>
+          <a href={onbidUrl} target="_blank" rel="noreferrer">입찰 전 주의사항</a>
+        </div>
+      )}
+
+      <section className="lot-detail-tabs-wrap">
+        <div className="lot-detail-tabs" role="tablist" aria-label="물건 상세 탭">
+          {detailTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              className={activeTab === tab.id ? "active" : ""}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="lot-detail-tab-panel" role="tabpanel">
+          {activeTab === "spec" && (
+            <>
+              <h3><CheckCircle2 size={18} /> 세부정보</h3>
+              <div className="lot-detail-section">
+                <h4>면적정보</h4>
+                <table className="lot-detail-table">
+                  <thead>
+                    <tr>
+                      <th>용도</th>
+                      <th>면적</th>
+                      <th>지분</th>
+                      <th>비고</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {areaRows.length > 0 ? areaRows.map((row) => (
+                      <tr key={`${row.usage}-${row.area}`}>
+                        <td>{row.usage}</td>
+                        <td>{formatAreaMetric(row.area, usePyeong)}</td>
+                        <td>{row.share}</td>
+                        <td>{row.note}</td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={4}>면적 상세는 온비드 원문에서 확인하세요.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="lot-detail-section">
+                <h4>지역</h4>
+                <table className="lot-detail-kv-table">
+                  <tbody>
+                    <tr>
+                      <th>지번</th>
+                      <td>{lotAddress}</td>
+                    </tr>
+                    <tr>
+                      <th>도로명</th>
+                      <td>{roadAddress}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {detailLoading && <p className="muted">상세 API 조회 중입니다.</p>}
+              {detailError && <p className="muted">상세 API 권한이 없어 목록 데이터 기준으로 표시 중입니다.</p>}
+            </>
+          )}
+
+          {activeTab === "seized" && (
+            <>
+              <h3><CheckCircle2 size={18} /> 압류재산정보</h3>
+              <table className="lot-detail-kv-table">
+                <tbody>
+                  <tr><th>재산구분</th><td>{propertyTag}</td></tr>
+                  <tr><th>지분물건</th><td>{lot.shareYn === "Y" ? "예" : "아니오"}</td></tr>
+                  <tr><th>수의계약</th><td>{lot.privateContractYn === "Y" ? "가능" : "대상 아님"}</td></tr>
+                  <tr><th>인도인수</th><td>{lot.note || "-"}</td></tr>
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {activeTab === "bid" && (
+            <>
+              <h3><CheckCircle2 size={18} /> 입찰정보</h3>
+              <table className="lot-detail-kv-table">
+                <tbody>
+                  <tr><th>입찰방식</th><td>{lot.bidMethod || "-"}</td></tr>
+                  <tr><th>입찰기간</th><td>{lot.starts || "-"} ~ {lot.ends || "-"}</td></tr>
+                  <tr><th>최저입찰가</th><td>{formatFullMoney(lot.minimum)}</td></tr>
+                  <tr><th>감정평가액</th><td>{formatFullMoney(lot.appraised)}</td></tr>
+                  <tr><th>배분요구종기</th><td>{lot.distributionDue || "-"}</td></tr>
+                  <tr><th>유찰횟수</th><td>{lot.failedCount ?? 0}회</td></tr>
+                </tbody>
+              </table>
+              {capabilityTags.length > 0 && (
+                <div className="lot-detail-chip-row">
+                  {capabilityTags.map((tag) => <span key={tag} className="lot-detail-chip blue">{tag}</span>)}
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === "market" && (
+            <>
+              <h3><CheckCircle2 size={18} /> 인근 시세 및 낙찰 사례</h3>
+              <p className="muted">인근 시세와 낙찰 사례는 온비드 원문에서 확인할 수 있습니다.</p>
+              <a className="secondary-action" href={onbidUrl} target="_blank" rel="noreferrer">온비드에서 보기 <ExternalLink size={16} /></a>
+            </>
+          )}
+        </div>
+      </section>
+
+      <div className="lot-detail-footer-actions">
+        <a className="secondary-action" href={onbidUrl} target="_blank" rel="noreferrer">온비드 상세 보기 <ExternalLink size={16} /></a>
+        <button className="primary-action" type="button" onClick={onBidCheck}>검토표 <ChevronRight size={18} /></button>
+      </div>
+    </article>
+  );
+}
+
 function normalizeItems(payload, assetType = "realty") {
   const body = payload?.response?.body ?? payload?.body ?? {};
   const items = body?.items?.item ?? body?.items ?? [];
@@ -776,6 +1170,11 @@ function normalizeItems(payload, assetType = "realty") {
       shareYn: item.alcYn || "",
       privateContractYn: item.pvctTrgtYn || "",
       distributionDue: item.dtbtRqrEdtmCont || "",
+      failedCount: Number(item.usbdNft ?? 0),
+      firstNoticeDate: formatOnbidDate(item.frstPbancDt ?? item.frstOpbdDt),
+      noticeDate: formatOnbidDate(item.pbctBegnDt ?? item.pbancDt),
+      roadAddress: item.rdnmAdrs || item.roadNmRadr || "",
+      bidMethod: [item.cptnMthodNm, item.bidDivNm].filter(Boolean).join(" / ") || item.bidDivNm || "",
       raw: item,
     };
   });
@@ -2417,69 +2816,19 @@ function App() {
         ) : view === "detail" && selected ? (
           <section className="detail-page">
             <button className="back-button" onClick={() => openView("search")}>목록으로</button>
-            <article className="detail-panel detail-page-panel">
-              <PhotoGallery photos={displayPhotos} loading={galleryLoading} title={selected.title} />
-
-              <div className="detail-head">
-                <span className={`status ${statusClass(selected.status)}`}>{selected.status}</span>
-                <button className="icon-button" aria-label="관심 물건 저장" onClick={() => toggleSaved(selected.id)}>
-                  <Heart size={19} fill={saved.includes(selected.id) ? "currentColor" : "none"} />
-                </button>
-              </div>
-              <h2>{selected.title}</h2>
-              <p className="agency"><Landmark size={16} /> {selected.agency}</p>
-
-              <div className="map-card">
-                <iframe title={`${selected.title} 지도`} src={links.embed} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
-                <div className="map-actions">
-                  <a href={links.kakao} target="_blank" rel="noreferrer"><MapPin size={15} /> 카카오맵</a>
-                  <a href={links.naver} target="_blank" rel="noreferrer"><Navigation size={15} /> 네이버지도</a>
-                  <a href={links.google} target="_blank" rel="noreferrer"><ExternalLink size={15} /> 구글지도</a>
-                </div>
-              </div>
-
-              <div className="detail-stats">
-                <div><small>물건관리번호</small><strong>{selected.id}</strong></div>
-                <div><small>공매조건번호</small><strong>{selected.conditionNo || "확인"}</strong></div>
-                <div><small>감정가</small><strong>{compactMoney(selected.appraised)}</strong></div>
-                <div><small>최저입찰가</small><strong>{compactMoney(selected.minimum)}</strong></div>
-                <div><small>토지면적</small><strong>{selected.landArea ? `${selected.landArea.toLocaleString()}㎡` : "확인"}</strong></div>
-                <div><small>건물면적</small><strong>{selected.buildingArea ? `${selected.buildingArea.toLocaleString()}㎡` : "확인"}</strong></div>
-              </div>
-
-              <div className="timeline">
-                <div><CalendarDays size={18} /><span>입찰 시작</span><strong>{selected.starts || "확인"}</strong></div>
-                <div><Clock3 size={18} /><span>입찰 마감</span><strong>{selected.ends || "확인"} · {daysLeft(selected.ends)}일</strong></div>
-              </div>
-
-              <div className="analysis-box">
-                <strong><ShieldAlert size={16} /> 검토 체크</strong>
-                <p>{selected.note}</p>
-                <div className="check-list">
-                  <span className={selected.shareYn === "Y" ? "danger" : ""}>지분물건: {selected.shareYn === "Y" ? "예" : "아니오"}</span>
-                  <span>배분요구종기: {selected.distributionDue || "확인 필요"}</span>
-                  <span>수의계약: {selected.privateContractYn === "Y" ? "가능" : "대상 아님"}</span>
-                </div>
-              </div>
-
-              <div className="analysis-box">
-                <strong>상세 정보</strong>
-                {detailLoading && <p>물건상세 조회 중입니다.</p>}
-                {detailError && <p>상세 API 권한이 없어 목록 데이터 기준으로 표시 중입니다. 자세한 내용은 온비드 원문에서 확인하세요.</p>}
-                {!detailLoading && !detailError && detail && (
-                  <div className="detail-extra">
-                    <span>사진 {displayPhotos.length}건</span>
-                    <span>감정평가 {detail.appraisals.length}건</span>
-                    <span>면적상세 {detail.areas.length}건</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="action-row">
-                <a className="secondary-action" href={onbidDetailUrl(selected)} target="_blank" rel="noreferrer">온비드 상세 보기 <ExternalLink size={16} /></a>
-                <button className="primary-action" onClick={openBidCheck}>검토표 <ChevronRight size={18} /></button>
-              </div>
-            </article>
+            <LotDetailPanel
+              lot={selected}
+              detail={detail}
+              detailLoading={detailLoading}
+              detailError={detailError}
+              photos={displayPhotos}
+              galleryLoading={galleryLoading}
+              links={links}
+              isSaved={saved.includes(selected.id)}
+              onToggleSaved={() => toggleSaved(selected.id)}
+              onBidCheck={openBidCheck}
+              layout="page"
+            />
           </section>
         ) : (
           <>
@@ -2654,67 +3003,19 @@ function App() {
 
           {selected && (
             <aside className="detail-panel">
-              <PhotoGallery photos={displayPhotos} loading={galleryLoading} title={selected.title} />
-
-              <div className="detail-head">
-                <span className={`status ${statusClass(selected.status)}`}>{selected.status}</span>
-                <button className="icon-button" aria-label="관심 물건 저장" onClick={() => toggleSaved(selected.id)}>
-                  <Heart size={19} fill={saved.includes(selected.id) ? "currentColor" : "none"} />
-                </button>
-              </div>
-              <h2>{selected.title}</h2>
-              <p className="agency"><Landmark size={16} /> {selected.agency}</p>
-
-              <div className="map-card">
-                <iframe title={`${selected.title} 지도`} src={links.embed} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
-                <div className="map-actions">
-                  <a href={links.kakao} target="_blank" rel="noreferrer"><MapPin size={15} /> 카카오맵</a>
-                  <a href={links.naver} target="_blank" rel="noreferrer"><Navigation size={15} /> 네이버지도</a>
-                  <a href={links.google} target="_blank" rel="noreferrer"><ExternalLink size={15} /> 구글지도</a>
-                </div>
-              </div>
-
-              <div className="detail-stats">
-                <div><small>물건관리번호</small><strong>{selected.id}</strong></div>
-                <div><small>공매조건번호</small><strong>{selected.conditionNo || "확인"}</strong></div>
-                <div><small>감정가</small><strong>{compactMoney(selected.appraised)}</strong></div>
-                <div><small>최저입찰가</small><strong>{compactMoney(selected.minimum)}</strong></div>
-                <div><small>토지면적</small><strong>{selected.landArea ? `${selected.landArea.toLocaleString()}㎡` : "확인"}</strong></div>
-                <div><small>건물면적</small><strong>{selected.buildingArea ? `${selected.buildingArea.toLocaleString()}㎡` : "확인"}</strong></div>
-              </div>
-
-              <div className="timeline">
-                <div><CalendarDays size={18} /><span>입찰 시작</span><strong>{selected.starts || "확인"}</strong></div>
-                <div><Clock3 size={18} /><span>입찰 마감</span><strong>{selected.ends || "확인"} · {daysLeft(selected.ends)}일</strong></div>
-              </div>
-
-              <div className="analysis-box">
-                <strong><ShieldAlert size={16} /> 검토 체크</strong>
-                <p>{selected.note}</p>
-                <div className="check-list">
-                  <span className={selected.shareYn === "Y" ? "danger" : ""}>지분물건: {selected.shareYn === "Y" ? "예" : "아니오"}</span>
-                  <span>배분요구종기: {selected.distributionDue || "확인 필요"}</span>
-                  <span>수의계약: {selected.privateContractYn === "Y" ? "가능" : "대상 아님"}</span>
-                </div>
-              </div>
-
-              <div className="analysis-box">
-                <strong>상세 정보</strong>
-                {detailLoading && <p>물건상세 조회 중입니다.</p>}
-                {detailError && <p>상세 API 권한이 없어 목록 데이터 기준으로 표시 중입니다. 자세한 내용은 온비드 원문에서 확인하세요.</p>}
-                {!detailLoading && !detailError && detail && (
-                  <div className="detail-extra">
-                    <span>사진 {displayPhotos.length}건</span>
-                    <span>감정평가 {detail.appraisals.length}건</span>
-                    <span>면적상세 {detail.areas.length}건</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="action-row">
-                <a className="secondary-action" href={onbidDetailUrl(selected)} target="_blank" rel="noreferrer">온비드 상세 보기 <ExternalLink size={16} /></a>
-                <button className="primary-action" onClick={openBidCheck}>검토표 <ChevronRight size={18} /></button>
-              </div>
+              <LotDetailPanel
+                lot={selected}
+                detail={detail}
+                detailLoading={detailLoading}
+                detailError={detailError}
+                photos={displayPhotos}
+                galleryLoading={galleryLoading}
+                links={links}
+                isSaved={saved.includes(selected.id)}
+                onToggleSaved={() => toggleSaved(selected.id)}
+                onBidCheck={openBidCheck}
+                layout="aside"
+              />
             </aside>
           )}
             </div>
