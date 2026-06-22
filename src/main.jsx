@@ -856,14 +856,14 @@ function BoardCommentSection({
   function renderBranch(parentId = null, depth = 0) {
     return getCommentsByParent(comments, parentId).map((comment) => (
       <article key={comment.id} className={`board-comment ${depth ? "is-child" : ""}`}>
-        <p className="board-comment-meta">
+        <p className="board-comment-line">
           <strong>{comment.author}</strong>
-          <span>{comment.createdAt}</span>
+          <span className="board-comment-date">{comment.createdAt}</span>
+          <span className="board-comment-text">{comment.body}</span>
+          <button type="button" className="board-comment-reply" onClick={() => onReply(question.id, comment.id)}>
+            답글
+          </button>
         </p>
-        <p className="board-comment-text">{comment.body}</p>
-        <button type="button" className="board-comment-reply" onClick={() => onReply(question.id, comment.id)}>
-          답글
-        </button>
         {getCommentsByParent(comments, comment.id).length > 0 && (
           <div className="board-comment-children">
             {renderBranch(comment.id, depth + 1)}

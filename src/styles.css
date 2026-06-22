@@ -738,9 +738,7 @@ a {
 }
 
 .board-comment {
-  display: grid;
-  gap: 4px;
-  padding: 8px 0;
+  padding: 6px 0;
 }
 
 .board-comment.is-child {
@@ -752,30 +750,36 @@ a {
 .board-comment-children {
   display: grid;
   gap: 0;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
-.board-comment-meta {
+.board-comment-line {
   margin: 0;
   display: flex;
-  align-items: center;
+  align-items: baseline;
+  flex-wrap: wrap;
   gap: 8px;
-  color: #8a96a0;
-  font-size: 12px;
+  line-height: 1.55;
+  font-size: 14px;
 }
 
-.board-comment-meta strong {
+.board-comment-line strong {
   color: #151b23;
-  font-size: 13px;
   font-weight: 800;
+  font-size: 13px;
+}
+
+.board-comment-date {
+  color: #8a96a0;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .board-comment-text {
-  margin: 0;
   color: #3f4d59;
-  line-height: 1.65;
+  flex: 1;
+  min-width: 0;
   white-space: pre-wrap;
-  font-size: 14px;
 }
 
 .board-comment-reply {
@@ -787,6 +791,7 @@ a {
   padding: 0;
   font-size: 12px;
   font-weight: 700;
+  flex: 0 0 auto;
 }
 
 .board-comment-reply:hover {
