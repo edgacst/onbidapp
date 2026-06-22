@@ -2547,6 +2547,53 @@ a {
   gap: 8px;
 }
 
+.lot-detail-meta-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lot-detail-doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #2f6fd6;
+  font-weight: 800;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.lot-detail-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid #edf1f4;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.lot-detail-field {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  border: 1px solid #edf1f4;
+  font-size: 14px;
+}
+
+.lot-detail-field strong {
+  padding: 10px 12px;
+  background: #f6f8fa;
+  color: #4d5d6a;
+  font-weight: 800;
+}
+
+.lot-detail-field span {
+  padding: 10px 12px;
+  color: #17324a;
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
 .lot-detail-chip {
   display: inline-flex;
   min-height: 28px;
@@ -2704,6 +2751,10 @@ a {
   }
 
   .lot-detail-meta-card ul {
+    grid-template-columns: 1fr;
+  }
+
+  .lot-detail-field-grid {
     grid-template-columns: 1fr;
   }
 }

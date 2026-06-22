@@ -990,19 +990,15 @@ function LotDetailPanel({
           </li>
           <li><strong>공고일자</strong><span>{lot.noticeDate || "-"}</span></li>
         </ul>
-        {capabilityTags.length > 0 && (
-          <div className="lot-detail-chip-row">
+        {(capabilityTags.length > 0 || restrictionTags.length > 0 || detail?.appraisals?.length > 0 || onbidUrl) && (
+          <div className="lot-detail-meta-footer">
             {capabilityTags.map((tag) => <span key={tag} className="lot-detail-chip blue">{tag}</span>)}
-          </div>
-        )}
-        {restrictionTags.length > 0 && (
-          <div className="lot-detail-chip-row">
             {restrictionTags.map((tag) => <span key={tag} className="lot-detail-chip gray">{tag}</span>)}
-          </div>
-        )}
-        {(detail?.appraisals?.length > 0 || onbidUrl) && (
-          <div className="lot-detail-doc-links">
-            <a href={onbidUrl} target="_blank" rel="noreferrer"><FileText size={16} /> 감정평가서</a>
+            {(detail?.appraisals?.length > 0 || onbidUrl) && (
+              <a className="lot-detail-doc-link" href={onbidUrl} target="_blank" rel="noreferrer">
+                <FileText size={16} /> 감정평가서
+              </a>
+            )}
           </div>
         )}
       </section>
@@ -1084,14 +1080,24 @@ function LotDetailPanel({
           {activeTab === "seized" && (
             <>
               <h3><CheckCircle2 size={18} /> 압류재산정보</h3>
-              <table className="lot-detail-kv-table">
-                <tbody>
-                  <tr><th>재산구분</th><td>{propertyTag}</td></tr>
-                  <tr><th>지분물건</th><td>{lot.shareYn === "Y" ? "예" : "아니오"}</td></tr>
-                  <tr><th>수의계약</th><td>{lot.privateContractYn === "Y" ? "가능" : "대상 아님"}</td></tr>
-                  <tr><th>인도인수</th><td>{lot.note || "-"}</td></tr>
-                </tbody>
-              </table>
+              <div className="lot-detail-field-grid">
+                <div className="lot-detail-field">
+                  <strong>재산구분</strong>
+                  <span>{propertyTag}</span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>지분물건</strong>
+                  <span>{lot.shareYn === "Y" ? "예" : "아니오"}</span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>수의계약</strong>
+                  <span>{lot.privateContractYn === "Y" ? "가능" : "대상 아님"}</span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>인도인수</strong>
+                  <span>{lot.note || "-"}</span>
+                </div>
+              </div>
             </>
           )}
 
