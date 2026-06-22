@@ -871,6 +871,7 @@ function App() {
   const [boardSearch, setBoardSearch] = useState("");
   const [boardStatus, setBoardStatus] = useState("all");
   const [boardWriteOpen, setBoardWriteOpen] = useState(false);
+  const [openQuestionId, setOpenQuestionId] = useState("");
   const [questionForm, setQuestionForm] = useState({ title: "", body: "", category: "물건검토" });
   const [questions, setQuestions] = useState(() => {
     try {
@@ -924,6 +925,10 @@ function App() {
       return statusOk && queryOk;
     });
   }, [questions, boardSearch, boardStatus]);
+
+  useEffect(() => {
+    setOpenQuestionId("");
+  }, [boardSearch, boardStatus]);
 
   const sortedLots = useMemo(() => {
     const base = data.sample ? sampleLots : data.lots;
@@ -1371,6 +1376,10 @@ function App() {
     setBoardWriteOpen(false);
   }
 
+  function toggleQuestion(questionId) {
+    setOpenQuestionId((current) => (current === questionId ? "" : questionId));
+  }
+
   function submitQuestion(event) {
     event.preventDefault();
     const title = questionForm.title.trim();
@@ -1671,8 +1680,10 @@ function App() {
                     <p>검색어를 줄이거나 새 작성하기로 질문을 등록해보세요.</p>
                   </div>
                 )}
-                {filteredQuestions.map((question) => (
-                  <article className="board-card" key={question.id}>
+                {filteredQuestions.map((question) => {
+                  const isOpen = openQuestionId === question.id;
+                  return (
+                  <article className={`board-card ${isOpen ? "expanded" : ""}`} key={question.id}>
                     <div className="board-card-top">
                       <div className="board-card-tags">
                         <span className="board-no">#{question.number || "-"}</span>
@@ -1680,17 +1691,27 @@ function App() {
                       </div>
                       <span className={`board-status ${question.status === "답변완료" ? "done" : ""}`}>{question.status}</span>
                     </div>
-                    <button className="board-title" type="button">
+                    <button
+                      className="board-title"
+                      type="button"
+                      aria-expanded={isOpen}
+                      onClick={() => toggleQuestion(question.id)}
+                    >
                       <strong>{question.title || question.body}</strong>
-                      <small>{question.body}</small>
                     </button>
                     <div className="board-meta">
                       <span>작성자 {question.author}</span>
                       <span>등록일 {question.createdAt}</span>
                       <span>조회 {question.views ?? 0}</span>
                     </div>
+                    {isOpen && (
+                      <div className="board-body">
+                        <p>{question.body}</p>
+                      </div>
+                    )}
                   </article>
-                ))}
+                  );
+                })}
               </div>
             </section>
 

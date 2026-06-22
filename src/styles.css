@@ -622,9 +622,14 @@ a {
   border: 1px solid #e2e9ee;
   border-radius: 12px;
   background: #fff;
-  padding: 16px 18px;
+  padding: 14px 18px;
   display: grid;
-  gap: 12px;
+  gap: 8px;
+}
+
+.board-card.expanded {
+  border-color: #c8d5e3;
+  box-shadow: 0 10px 24px rgba(30, 49, 65, 0.06);
 }
 
 .board-card-top {
@@ -647,25 +652,40 @@ a {
   border: 0;
   background: transparent;
   color: #151b23;
-  padding: 0;
+  padding: 2px 0;
   text-align: left;
-  display: grid;
-  gap: 4px;
+  display: block;
+  width: 100%;
+  cursor: pointer;
 }
 
-.board-title strong,
-.board-title small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.board-title:hover strong,
+.board-card.expanded .board-title strong {
+  color: #3530b8;
 }
 
 .board-title strong {
-  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+  font-size: 16px;
+  line-height: 1.45;
 }
 
-.board-title small {
-  color: #7a8792;
+.board-body {
+  margin-top: 4px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #f7fafc;
+  border: 1px solid #e7edf2;
+}
+
+.board-body p {
+  margin: 0;
+  color: #3f4d59;
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 
 .board-meta {
@@ -2619,7 +2639,7 @@ a {
   }
 
   .board-title {
-    gap: 6px;
+    gap: 0;
   }
 
   .board-title strong {
@@ -2628,12 +2648,8 @@ a {
     line-height: 1.35;
   }
 
-  .board-title small {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    line-height: 1.45;
+  .board-body {
+    padding: 12px 14px;
   }
 
   .board-status {
