@@ -662,9 +662,10 @@ async function fetchOnbidPageMeta(lot) {
   }
 }
 
-function buildAppraisalUrlFromLot(lot, pageMeta = {}, detail = null) {
-  if (pageMeta?.appraisalUrl) return pageMeta.appraisalUrl;
-  if (pageMeta?.appraisalRows?.[0]?.reportUrl) return pageMeta.appraisalRows[0].reportUrl;
+function buildAppraisalUrlFromLot(lot, pageMeta, detail = null) {
+  const page = pageMeta ?? {};
+  if (page.appraisalUrl) return page.appraisalUrl;
+  if (page.appraisalRows?.[0]?.reportUrl) return page.appraisalRows[0].reportUrl;
 
   const appraisalItems = asArray(
     detail?.appraisals
@@ -1021,24 +1022,26 @@ function buildAreaRows(lot, detail) {
   return rows;
 }
 
-function lotCapabilityTags(lot, pageMeta = {}) {
+function lotCapabilityTags(lot, pageMeta) {
+  const meta = pageMeta ?? {};
   const raw = lot?.raw || {};
   const fromApi = [
     raw.collbBidPsblYn === "Y" ? "공동입찰가능" : "",
     raw.subtBidPsblYn === "Y" || raw.agntBidPsblYn === "Y" || raw.prxyBidPsblYn === "Y" ? "대리입찰가능" : "",
     raw.scndRnkAplyPsblYn === "Y" ? "차순위 신청가능" : "",
   ].filter(Boolean);
-  return mergeBadgeLists(fromApi, pageMeta.bidMethods);
+  return mergeBadgeLists(fromApi, meta.bidMethods);
 }
 
-function bidRestrictionTags(lot, pageMeta = {}) {
+function bidRestrictionTags(lot, pageMeta) {
+  const meta = pageMeta ?? {};
   const raw = lot?.raw || {};
   const fromApi = [
     "1인 이상의 유효한 입찰",
     raw.twtmGthrBidPsblYn === "Y" || raw.smlCltrReBidPsblYn === "Y" ? "동일물건 2회 이상 입찰가능" : "",
     raw.sameIpBidPsblYn === "Y" ? "동일IP 중복입찰가능" : "",
   ].filter(Boolean);
-  const htmlList = pageMeta.bidRestrictions || [];
+  const htmlList = meta.bidRestrictions || [];
   if (htmlList.length > fromApi.filter((tag) => tag !== "1인 이상의 유효한 입찰").length) {
     return htmlList.length ? htmlList : fromApi;
   }
