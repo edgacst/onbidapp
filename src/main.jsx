@@ -89,9 +89,9 @@ const statusTiles = [
 ];
 
 const homeAssetTypes = [
-  { label: "부동산", value: "realty", icon: Building2 },
-  { label: "동산", value: "movable", icon: Landmark },
-  { label: "차량", value: "car", icon: WalletCards },
+  { label: "부동산", value: "realty", icon: Building2, image: "/images/asset-realty.png" },
+  { label: "동산", value: "movable", icon: Landmark, image: "/images/asset-movable.png" },
+  { label: "차량", value: "car", icon: WalletCards, image: "/images/asset-car.png" },
 ];
 
 const homeDispositions = [
@@ -1231,11 +1231,15 @@ function App() {
                     return (
                       <button
                         key={item.value}
-                        className={homeAssetType === item.value ? "active" : ""}
+                        className={`asset-tab-card ${homeAssetType === item.value ? "active" : ""}`}
+                        style={{ backgroundImage: `url(${item.image})` }}
                         onClick={() => selectHomeAssetType(item.value)}
                         type="button"
                       >
-                        <Icon size={18} /> {item.label}
+                        <span className="asset-tab-overlay" aria-hidden="true" />
+                        <span className="asset-tab-content">
+                          <Icon size={18} /> {item.label}
+                        </span>
                       </button>
                     );
                   })}

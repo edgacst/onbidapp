@@ -819,25 +819,55 @@ a {
   margin-bottom: 18px;
 }
 
-.asset-tabs button {
-  min-height: 50px;
+.asset-tabs button,
+.asset-tab-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 72px;
   border: 1px solid #d7e0e7;
-  border-radius: 8px;
-  background: #fff;
-  color: #5c6975;
+  border-radius: 10px;
+  background-color: #eef2f5;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  color: #fff;
+  padding: 0;
+  font-weight: 800;
+}
+
+.asset-tab-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(10, 24, 40, 0.18), rgba(10, 24, 40, 0.62)),
+    linear-gradient(90deg, rgba(10, 24, 40, 0.34), rgba(10, 24, 40, 0.08));
+  transition: background 0.2s ease;
+}
+
+.asset-tab-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  min-height: 72px;
   padding: 0 16px;
-  font-weight: 800;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
 }
 
-.asset-tabs button.active {
+.asset-tabs button.active,
+.asset-tab-card.active {
   border-color: #5a56e8;
-  background: #f0efff;
-  color: #514ee8;
-  box-shadow: 0 8px 20px rgba(81, 78, 232, 0.18);
+  box-shadow: 0 10px 24px rgba(81, 78, 232, 0.28);
+  transform: translateY(-1px);
+}
+
+.asset-tabs button.active .asset-tab-overlay,
+.asset-tab-card.active .asset-tab-overlay {
+  background:
+    linear-gradient(180deg, rgba(53, 48, 184, 0.24), rgba(53, 48, 184, 0.72)),
+    linear-gradient(90deg, rgba(53, 48, 184, 0.42), rgba(38, 166, 154, 0.18));
 }
 
 .home-filter-grid {
@@ -2114,10 +2144,14 @@ a {
     margin-bottom: 12px;
   }
 
-  .asset-tabs button {
-    min-height: 42px;
-    justify-content: center;
-    padding: 0 6px;
+  .asset-tabs button,
+  .asset-tab-card {
+    min-height: 58px;
+  }
+
+  .asset-tab-content {
+    min-height: 58px;
+    padding: 0 8px;
     font-size: 13px;
   }
 
