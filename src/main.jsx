@@ -146,6 +146,44 @@ function cleanQuickKeyword(value, usageCode, disposition) {
     .trim();
 }
 
+function normalizeLotId(value) {
+  const text = String(value || "").trim();
+  if (isOnbidLotId(text)) return text;
+  const digits = text.replace(/[^\d]/g, "");
+  if (digits.length === 14) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 9)}-${digits.slice(9)}`;
+  }
+  return text;
+}
+
+function parseRegionFromKeyword(keyword) {
+  const text = String(keyword || "").trim();
+  if (!text) return { keyword: "", region: "" };
+
+  const matched = regions
+    .filter((name) => name !== "전체")
+    .find((name) => text.includes(name));
+
+  if (!matched) return { keyword: text, region: "" };
+
+  return {
+    keyword: text.replace(matched, "").replace(/\s+/g, " ").trim(),
+    region: matched,
+  };
+}
+
+function parseHomeSearchInput(rawKeyword, usageCode, disposition) {
+  const trimmed = String(rawKeyword || "").trim();
+  const lotId = normalizeLotId(trimmed);
+  if (isOnbidLotId(lotId)) {
+    return { type: "lot", lotId, keyword: lotId, region: "" };
+  }
+
+  const cleaned = cleanQuickKeyword(trimmed, usageCode, disposition) || trimmed;
+  const { keyword, region } = parseRegionFromKeyword(cleaned);
+  return { type: "list", lotId: "", keyword, region };
+}
+
 const sampleLots = [
   {
     id: "sample-1",
@@ -1031,17 +1069,46 @@ function App() {
     setDspsMethod(nextDspsMethod);
 
     const nextKeyword = cleanQuickKeyword(quickKeyword, nextType === "realty" ? homeUsage : "", homeDisposition);
-    setKeyword(nextKeyword);
-    setQuickKeyword(nextKeyword);
+    const parsed = parseHomeSearchInput(nextKeyword, nextType === "realty" ? homeUsage : "", homeDisposition);
+    const nextRegion = parsed.region || region;
+    if (parsed.region) setRegion(parsed.region);
+    setKeyword(parsed.type === "lot" ? parsed.lotId : parsed.keyword);
+    setQuickKeyword(parsed.type === "lot" ? parsed.lotId : parsed.keyword);
+
+    if (parsed.type === "lot") {
+      const assetType = assetTypeFromLotId(parsed.lotId);
+      setHomeAssetType(assetType);
+      if (assetType !== "realty") {
+        setHomeUsage("");
+        setUsageCategoryId("");
+      }
+      pushAppHistory("detail", parsed.lotId);
+      setView("detail");
+      loadLots({
+        keyword: parsed.lotId,
+        propertyType,
+        bidType,
+        privateContract,
+        region: nextRegion,
+        pageNo: 1,
+        numOfRows: PAGE_SIZE,
+        statusCode: "",
+        dspsMethod: nextDspsMethod,
+        usageCategoryId: nextUsageCategoryId,
+        assetType,
+        preserveSelectedId: parsed.lotId,
+      });
+      return;
+    }
 
     pushAppHistory("search");
     setView("search");
     loadLots({
-      keyword: nextKeyword,
+      keyword: parsed.keyword,
       propertyType,
       bidType,
       privateContract,
-      region,
+      region: nextRegion,
       pageNo: 1,
       numOfRows: PAGE_SIZE,
       statusCode: "",
@@ -1094,60 +1161,70 @@ function App() {
     setView("detail");
   }
 
-  async function runQuickSearch() {
+  async function runQuickSearch(rawKeyword = quickKeyword) {
     setStatusFocus("");
     setCheckMode(false);
     setPageNo(1);
-    const nextKeyword = cleanQuickKeyword(quickKeyword, homeUsage, homeDisposition);
-    if (isOnbidLotId(nextKeyword)) {
-      const assetType = assetTypeFromLotId(nextKeyword);
-      setKeyword(nextKeyword);
-      setQuickKeyword(nextKeyword);
+
+    const parsed = parseHomeSearchInput(rawKeyword, homeUsage, homeDisposition);
+    const nextRegion = parsed.region || region;
+    if (parsed.region) setRegion(parsed.region);
+
+    if (parsed.type === "lot") {
+      const assetType = assetTypeFromLotId(parsed.lotId);
+      setKeyword(parsed.lotId);
+      setQuickKeyword(parsed.lotId);
       setHomeAssetType(assetType);
       if (assetType !== "realty") {
         setHomeUsage("");
         setUsageCategoryId("");
       }
       const filters = {
-        keyword: nextKeyword,
+        keyword: parsed.lotId,
         propertyType,
         bidType,
         privateContract,
-        region,
+        region: nextRegion,
         pageNo: 1,
         numOfRows: PAGE_SIZE,
         statusCode: "",
         dspsMethod: "",
         usageCategoryId: "",
         assetType,
-        preserveSelectedId: nextKeyword,
+        preserveSelectedId: parsed.lotId,
       };
       await loadLots(filters);
-      pushAppHistory("detail", nextKeyword);
+      pushAppHistory("detail", parsed.lotId);
       setView("detail");
       return;
     }
+
     const nextDspsMethod = dispositionCodes[homeDisposition] ?? "";
     const nextUsageCategoryId = homeAssetType === "realty" ? homeUsage : "";
     const filters = {
-      keyword: nextKeyword,
+      keyword: parsed.keyword,
       propertyType,
       bidType,
       privateContract,
-      region,
+      region: nextRegion,
       pageNo: 1,
       numOfRows: PAGE_SIZE,
       dspsMethod: nextDspsMethod,
       usageCategoryId: nextUsageCategoryId,
       assetType: homeAssetType,
     };
-    setKeyword(nextKeyword);
-    setQuickKeyword(nextKeyword);
+    setKeyword(parsed.keyword);
+    setQuickKeyword(parsed.keyword);
     setDspsMethod(nextDspsMethod);
     setUsageCategoryId(nextUsageCategoryId);
     pushAppHistory("search");
     setView("search");
     loadLots(filters);
+  }
+
+  function submitHomeSearch(event) {
+    event.preventDefault();
+    runQuickSearch();
   }
 
   function submitAuth(event) {
@@ -1256,10 +1333,15 @@ function App() {
             <section className="home-main">
               <div className="home-search-panel">
                 <h2><Search size={22} /> 빠른검색</h2>
-                <label className="home-search-box">
-                  <input value={quickKeyword} onChange={(event) => setQuickKeyword(event.target.value)} placeholder="검색어를 입력하세요." />
-                  <button type="button" onClick={runQuickSearch} aria-label="검색"><Search size={22} /></button>
-                </label>
+                <form className="home-search-box" onSubmit={submitHomeSearch}>
+                  <input
+                    value={quickKeyword}
+                    onChange={(event) => setQuickKeyword(event.target.value)}
+                    placeholder="물건명, 주소, 물건관리번호"
+                    aria-label="빠른검색"
+                  />
+                  <button type="submit" aria-label="검색"><Search size={22} /></button>
+                </form>
                 <div className="asset-tabs">
                   {homeAssetTypes.map((item) => {
                     const Icon = item.icon;
