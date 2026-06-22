@@ -857,12 +857,14 @@ function BoardCommentSection({
     return getCommentsByParent(comments, parentId).map((comment) => (
       <article key={comment.id} className={`board-comment ${depth ? "is-child" : ""}`}>
         <p className="board-comment-line">
-          <strong>{comment.author}</strong>
-          <span className="board-comment-date">{comment.createdAt}</span>
           <span className="board-comment-text">{comment.body}</span>
-          <button type="button" className="board-comment-reply" onClick={() => onReply(question.id, comment.id)}>
-            답글
-          </button>
+          <span className="board-comment-aside">
+            <strong>{comment.author}</strong>
+            <span className="board-comment-date">{comment.createdAt}</span>
+            <button type="button" className="board-comment-reply" onClick={() => onReply(question.id, comment.id)}>
+              답글
+            </button>
+          </span>
         </p>
         {getCommentsByParent(comments, comment.id).length > 0 && (
           <div className="board-comment-children">
@@ -1845,11 +1847,9 @@ function App() {
                         <span className="board-no">{question.number ?? "-"}</span>
                         <strong>{question.title || question.body}</strong>
                       </button>
-                      <div className="board-meta">
-                        <span>작성자 {question.author}</span>
-                        <span>등록일 {question.createdAt}</span>
-                        <span>조회 {question.views ?? 0}</span>
-                        <span>댓글 {getQuestionComments(question).length}</span>
+                      <div className="board-row-aside">
+                        <span className="board-author">{question.author}</span>
+                        <span className={`board-status ${question.status === "답변완료" ? "done" : ""}`}>{question.status}</span>
                       </div>
                     </div>
                     {isOpen && (
