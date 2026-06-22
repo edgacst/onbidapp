@@ -613,23 +613,33 @@ a {
 
 .board-list {
   display: grid;
-  gap: 12px;
-  padding: 18px;
-  background: #f6f8fa;
+  gap: 0;
+  padding: 0;
+  background: #fff;
 }
 
 .board-card {
-  border: 1px solid #e2e9ee;
-  border-radius: 12px;
+  border: 0;
+  border-radius: 0;
   background: #fff;
-  padding: 14px 18px;
+  padding: 12px 18px;
   display: grid;
-  gap: 8px;
+  gap: 0;
+  border-bottom: 1px solid #e8edf1;
 }
 
 .board-card.expanded {
-  border-color: #c8d5e3;
-  box-shadow: 0 10px 24px rgba(30, 49, 65, 0.06);
+  border-color: #e8edf1;
+  box-shadow: none;
+  padding: 16px 18px 20px;
+  gap: 8px;
+}
+
+.board-card.expanded .board-title strong {
+  color: #151b23;
+  white-space: normal;
+  font-size: 17px;
+  line-height: 1.45;
 }
 
 .board-card-top {
@@ -659,8 +669,7 @@ a {
   cursor: pointer;
 }
 
-.board-title:hover strong,
-.board-card.expanded .board-title strong {
+.board-card:not(.expanded) .board-title:hover strong {
   color: #3530b8;
 }
 
@@ -674,22 +683,33 @@ a {
 }
 
 .board-body {
-  margin-top: 4px;
-  padding: 8px 0 0;
+  margin-top: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
 }
 
-.board-body p {
+.board-body .board-card-top {
+  margin-top: 2px;
+}
+
+.board-body .board-meta {
   margin: 0;
+}
+
+.board-body > p {
+  margin: 0 0 12px;
   color: #3f4d59;
-  line-height: 1.7;
+  line-height: 1.75;
   white-space: pre-wrap;
 }
 
 .board-comments {
-  margin-top: 16px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #edf2f5;
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .board-comments-head {
@@ -706,58 +726,59 @@ a {
 
 .board-comment-tree {
   display: grid;
-  gap: 12px;
+  gap: 0;
 }
 
 .board-comment {
   display: grid;
-  gap: 8px;
-  padding: 0;
+  gap: 4px;
+  padding: 8px 0;
 }
 
 .board-comment.is-child {
-  margin-left: 18px;
+  margin-left: 14px;
+  padding-left: 10px;
+  border-left: 2px solid #e8edf1;
 }
 
 .board-comment-children {
   display: grid;
-  gap: 10px;
-  margin-top: 4px;
+  gap: 0;
+  margin-top: 6px;
 }
 
-.board-comment-head {
+.board-comment-meta {
+  margin: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   color: #8a96a0;
   font-size: 12px;
 }
 
-.board-comment-head strong {
+.board-comment-meta strong {
   color: #151b23;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
-.board-comment p {
+.board-comment-text {
   margin: 0;
   color: #3f4d59;
   line-height: 1.65;
   white-space: pre-wrap;
+  font-size: 14px;
 }
 
 .board-comment-reply {
   width: fit-content;
-  min-height: 30px;
+  min-height: auto;
   border: 0;
   background: transparent;
-  color: #4f5d69;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  color: #8a96a0;
   padding: 0;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .board-comment-reply:hover {
@@ -767,39 +788,53 @@ a {
 .board-comment-empty,
 .board-reply-hint {
   margin: 0;
-  color: #697784;
-  font-size: 14px;
+  color: #8a96a0;
+  font-size: 13px;
   line-height: 1.55;
 }
 
 .board-reply-hint {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #f0efff;
-  color: #3530b8;
-  font-weight: 700;
+  padding: 0;
+  background: none;
+  color: #697784;
+  font-weight: 500;
 }
 
 .board-comment-form {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  padding-top: 4px;
 }
 
 .board-comment-form textarea {
   width: 100%;
-  border: 1px solid #d7e0e7;
-  border-radius: 8px;
-  background: #fff;
+  border: 0;
+  border-bottom: 1px solid #dde5eb;
+  border-radius: 0;
+  background: transparent;
   color: #151b23;
-  padding: 12px;
+  padding: 6px 0;
   line-height: 1.55;
   resize: vertical;
   outline: 0;
 }
 
-.board-comment-form-actions {
-  display: flex;
-  justify-content: flex-end;
+.board-comment-form textarea:focus {
+  border-bottom-color: #5a56e8;
+}
+
+.board-comment-submit {
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  color: #3530b8;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.board-comment-submit:hover {
+  text-decoration: underline;
 }
 
 .board-meta {
@@ -2736,11 +2771,15 @@ a {
   }
 
   .board-list {
-    padding: 12px;
+    padding: 0;
   }
 
   .board-card {
-    padding: 13px;
+    padding: 11px 14px;
+  }
+
+  .board-card.expanded {
+    padding: 14px;
   }
 
   .board-card-top {
@@ -2762,12 +2801,8 @@ a {
     line-height: 1.35;
   }
 
-  .board-body {
-    padding: 12px 14px;
-  }
-
   .board-comment.is-child {
-    margin-left: 12px;
+    margin-left: 10px;
   }
 
   .board-status {

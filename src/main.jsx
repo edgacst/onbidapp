@@ -20,7 +20,6 @@ import {
   MessageCircleQuestion,
   Navigation,
   RefreshCw,
-  Reply,
   Search,
   ShieldAlert,
   SlidersHorizontal,
@@ -857,13 +856,13 @@ function BoardCommentSection({
   function renderBranch(parentId = null, depth = 0) {
     return getCommentsByParent(comments, parentId).map((comment) => (
       <article key={comment.id} className={`board-comment ${depth ? "is-child" : ""}`}>
-        <div className="board-comment-head">
+        <p className="board-comment-meta">
           <strong>{comment.author}</strong>
           <span>{comment.createdAt}</span>
-        </div>
-        <p>{comment.body}</p>
+        </p>
+        <p className="board-comment-text">{comment.body}</p>
         <button type="button" className="board-comment-reply" onClick={() => onReply(question.id, comment.id)}>
-          <Reply size={14} /> 답글
+          답글
         </button>
         {getCommentsByParent(comments, comment.id).length > 0 && (
           <div className="board-comment-children">
@@ -890,19 +889,17 @@ function BoardCommentSection({
         )}
       </div>
       {replyTarget && (
-        <p className="board-reply-hint">{replyTarget.author}님 댓글에 답글을 작성합니다.</p>
+        <p className="board-reply-hint">{replyTarget.author}님에게 답글 작성 중</p>
       )}
       <form className="board-comment-form" onSubmit={(event) => onSubmit(event, question.id)}>
         <textarea
           value={commentDraft}
           onChange={(event) => onDraftChange(event.target.value)}
           placeholder={replyTarget ? "답글을 입력하세요." : "댓글을 입력하세요."}
-          rows={3}
+          rows={2}
           required
         />
-        <div className="board-comment-form-actions">
-          <button className="primary-action" type="submit">{replyTarget ? "답글 등록" : "댓글 등록"}</button>
-        </div>
+        <button className="board-comment-submit" type="submit">{replyTarget ? "답글 등록" : "댓글 등록"}</button>
       </form>
     </section>
   );
@@ -1836,13 +1833,6 @@ function App() {
                   const isOpen = openQuestionId === question.id;
                   return (
                   <article className={`board-card ${isOpen ? "expanded" : ""}`} key={question.id}>
-                    <div className="board-card-top">
-                      <div className="board-card-tags">
-                        <span className="board-no">#{question.number || "-"}</span>
-                        <mark>{question.category || "일반"}</mark>
-                      </div>
-                      <span className={`board-status ${question.status === "답변완료" ? "done" : ""}`}>{question.status}</span>
-                    </div>
                     <button
                       className="board-title"
                       type="button"
@@ -1851,14 +1841,21 @@ function App() {
                     >
                       <strong>{question.title || question.body}</strong>
                     </button>
-                    <div className="board-meta">
-                      <span>작성자 {question.author}</span>
-                      <span>등록일 {question.createdAt}</span>
-                      <span>조회 {question.views ?? 0}</span>
-                      <span>댓글 {getQuestionComments(question).length}</span>
-                    </div>
                     {isOpen && (
                       <div className="board-body">
+                        <div className="board-card-top">
+                          <div className="board-card-tags">
+                            <span className="board-no">#{question.number || "-"}</span>
+                            <mark>{question.category || "일반"}</mark>
+                          </div>
+                          <span className={`board-status ${question.status === "답변완료" ? "done" : ""}`}>{question.status}</span>
+                        </div>
+                        <div className="board-meta">
+                          <span>작성자 {question.author}</span>
+                          <span>등록일 {question.createdAt}</span>
+                          <span>조회 {question.views ?? 0}</span>
+                          <span>댓글 {getQuestionComments(question).length}</span>
+                        </div>
                         <p>{question.body}</p>
                         <BoardCommentSection
                           question={question}
