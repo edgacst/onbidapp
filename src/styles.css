@@ -675,10 +675,7 @@ a {
 
 .board-body {
   margin-top: 4px;
-  padding: 14px 16px;
-  border-radius: 10px;
-  background: #f7fafc;
-  border: 1px solid #e7edf2;
+  padding: 8px 0 0;
 }
 
 .board-body p {
@@ -690,8 +687,7 @@ a {
 
 .board-comments {
   margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #e2e9ee;
+  padding-top: 10px;
   display: grid;
   gap: 14px;
 }
@@ -716,16 +712,11 @@ a {
 .board-comment {
   display: grid;
   gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid #e4ebf0;
-  border-radius: 10px;
-  background: #fff;
+  padding: 0;
 }
 
 .board-comment.is-child {
   margin-left: 18px;
-  border-left: 3px solid #d7e3f1;
-  background: #fbfdff;
 }
 
 .board-comment-children {
@@ -739,12 +730,12 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: #60707d;
+  color: #8a96a0;
   font-size: 12px;
 }
 
 .board-comment-head strong {
-  color: #17324a;
+  color: #151b23;
   font-size: 14px;
 }
 
