@@ -839,8 +839,8 @@ a {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(10, 24, 40, 0.18), rgba(10, 24, 40, 0.62)),
-    linear-gradient(90deg, rgba(10, 24, 40, 0.34), rgba(10, 24, 40, 0.08));
+    linear-gradient(180deg, rgba(10, 24, 40, 0.06), rgba(10, 24, 40, 0.28)),
+    linear-gradient(90deg, rgba(10, 24, 40, 0.14), rgba(10, 24, 40, 0.02));
   transition: background 0.2s ease;
 }
 
@@ -853,7 +853,7 @@ a {
   gap: 8px;
   min-height: 72px;
   padding: 0 16px;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 
 .asset-tabs button.active,
@@ -866,8 +866,8 @@ a {
 .asset-tabs button.active .asset-tab-overlay,
 .asset-tab-card.active .asset-tab-overlay {
   background:
-    linear-gradient(180deg, rgba(53, 48, 184, 0.24), rgba(53, 48, 184, 0.72)),
-    linear-gradient(90deg, rgba(53, 48, 184, 0.42), rgba(38, 166, 154, 0.18));
+    linear-gradient(180deg, rgba(53, 48, 184, 0.12), rgba(53, 48, 184, 0.38)),
+    linear-gradient(90deg, rgba(53, 48, 184, 0.2), rgba(38, 166, 154, 0.08));
 }
 
 .home-filter-grid {
