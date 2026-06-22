@@ -2501,19 +2501,32 @@ a {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 28px;
 }
 
 .lot-detail-meta-card li {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
   font-size: 14px;
+  min-width: 0;
+}
+
+.lot-detail-meta-card li:last-child:nth-child(odd) {
+  grid-column: 1;
 }
 
 .lot-detail-meta-card strong {
   color: #334351;
+  white-space: nowrap;
+}
+
+.lot-detail-meta-card li span {
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .lot-detail-inline-tag {
@@ -2688,6 +2701,10 @@ a {
 
   .lot-detail-spec-item.span-2 {
     grid-column: auto;
+  }
+
+  .lot-detail-meta-card ul {
+    grid-template-columns: 1fr;
   }
 }
 
