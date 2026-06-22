@@ -771,27 +771,13 @@ a {
   margin: 0;
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
   line-height: 1.55;
   font-size: 14px;
 }
 
-.board-comment-text {
-  flex: 1;
-  min-width: 0;
-  color: #3f4d59;
-  white-space: pre-wrap;
-}
-
-.board-comment-aside {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.board-comment-aside strong {
+.board-comment-author {
   color: #151b23;
   font-weight: 800;
   font-size: 13px;
@@ -800,6 +786,16 @@ a {
 .board-comment-date {
   color: #8a96a0;
   font-size: 12px;
+  white-space: nowrap;
+}
+
+.board-comment-body {
+  display: inline;
+  color: #3f4d59;
+}
+
+.board-comment-text {
+  white-space: pre-wrap;
 }
 
 .board-comment-reply {
@@ -809,9 +805,10 @@ a {
   background: transparent;
   color: #8a96a0;
   padding: 0;
+  margin-left: 6px;
   font-size: 12px;
   font-weight: 700;
-  flex: 0 0 auto;
+  vertical-align: baseline;
 }
 
 .board-comment-reply:hover {
@@ -2827,16 +2824,6 @@ a {
   .board-row-aside {
     align-self: flex-end;
     padding-left: 36px;
-  }
-
-  .board-comment-line {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .board-comment-aside {
-    padding-left: 0;
   }
 
   .board-body {

@@ -838,6 +838,11 @@ function getCommentsByParent(comments, parentId = null) {
     .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
 }
 
+function formatCommentAuthor(author) {
+  const name = String(author || "비회원");
+  return name.slice(0, 4);
+}
+
 function BoardCommentSection({
   question,
   replyingTo,
@@ -857,10 +862,10 @@ function BoardCommentSection({
     return getCommentsByParent(comments, parentId).map((comment) => (
       <article key={comment.id} className={`board-comment ${depth ? "is-child" : ""}`}>
         <p className="board-comment-line">
-          <span className="board-comment-text">{comment.body}</span>
-          <span className="board-comment-aside">
-            <strong>{comment.author}</strong>
-            <span className="board-comment-date">{comment.createdAt}</span>
+          <strong className="board-comment-author">{formatCommentAuthor(comment.author)}</strong>
+          <span className="board-comment-date">{comment.createdAt}</span>
+          <span className="board-comment-body">
+            <span className="board-comment-text">{comment.body}</span>
             <button type="button" className="board-comment-reply" onClick={() => onReply(question.id, comment.id)}>
               답글
             </button>
