@@ -843,14 +843,45 @@ function formatCommentAuthor(author) {
   return name.slice(0, 4);
 }
 
+function getCurrentAuthor(member) {
+  return member?.name || "비회원";
+}
+
+function isOwnComment(comment, currentAuthor) {
+  return String(comment?.author || "비회원") === currentAuthor;
+}
+
+function collectCommentBranchIds(comments, rootId) {
+  const ids = new Set([rootId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    comments.forEach((comment) => {
+      if (comment.parentId && ids.has(comment.parentId) && !ids.has(comment.id)) {
+        ids.add(comment.id);
+        changed = true;
+      }
+    });
+  }
+  return ids;
+}
+
 function BoardCommentSection({
   question,
+  currentAuthor,
   replyingTo,
   commentDraft,
+  editingComment,
+  editCommentDraft,
   onDraftChange,
   onSubmit,
   onReply,
   onCancelReply,
+  onEditStart,
+  onEditDraftChange,
+  onEditSave,
+  onEditCancel,
+  onDelete,
 }) {
   const comments = getQuestionComments(question);
   const isReplyingHere = replyingTo.questionId === question.id;
@@ -859,17 +890,46 @@ function BoardCommentSection({
     : null;
 
   function renderBranch(parentId = null, depth = 0) {
-    return getCommentsByParent(comments, parentId).map((comment) => (
+    return getCommentsByParent(comments, parentId).map((comment) => {
+      const isEditing = editingComment.questionId === question.id && editingComment.commentId === comment.id;
+      const isOwn = isOwnComment(comment, currentAuthor);
+
+      return (
       <article key={comment.id} className={`board-comment ${depth ? "is-child" : ""}`}>
         <p className="board-comment-line">
           <strong className="board-comment-author">{formatCommentAuthor(comment.author)}</strong>
           <span className="board-comment-date">{comment.createdAt}</span>
-          <span className="board-comment-body">
-            <span className="board-comment-text">{comment.body}</span>
-            <button type="button" className="board-comment-reply" onClick={() => onReply(question.id, comment.id)}>
-              답글
-            </button>
-          </span>
+          {isEditing ? (
+            <form className="board-comment-edit" onSubmit={(event) => onEditSave(event, question.id)}>
+              <textarea
+                value={editCommentDraft}
+                onChange={(event) => onEditDraftChange(event.target.value)}
+                rows={2}
+                required
+              />
+              <span className="board-comment-edit-actions">
+                <button type="submit" className="board-comment-action">저장</button>
+                <button type="button" className="board-comment-action" onClick={onEditCancel}>취소</button>
+              </span>
+            </form>
+          ) : (
+            <span className="board-comment-body">
+              <span className="board-comment-text">{comment.body}</span>
+              <button type="button" className="board-comment-reply" onClick={() => onReply(question.id, comment.id)}>
+                답글
+              </button>
+              {isOwn && (
+                <>
+                  <button type="button" className="board-comment-action" onClick={() => onEditStart(question.id, comment)}>
+                    수정
+                  </button>
+                  <button type="button" className="board-comment-action danger" onClick={() => onDelete(question.id, comment.id)}>
+                    삭제
+                  </button>
+                </>
+              )}
+            </span>
+          )}
         </p>
         {getCommentsByParent(comments, comment.id).length > 0 && (
           <div className="board-comment-children">
@@ -877,7 +937,8 @@ function BoardCommentSection({
           </div>
         )}
       </article>
-    ));
+      );
+    });
   }
 
   return (
@@ -958,6 +1019,8 @@ function App() {
   const [openQuestionId, setOpenQuestionId] = useState("");
   const [replyingTo, setReplyingTo] = useState({ questionId: "", parentId: "" });
   const [commentDraft, setCommentDraft] = useState("");
+  const [editingComment, setEditingComment] = useState({ questionId: "", commentId: "" });
+  const [editCommentDraft, setEditCommentDraft] = useState("");
   const [questionForm, setQuestionForm] = useState({ title: "", body: "", category: "물건검토" });
   const [questions, setQuestions] = useState(() => {
     try {
@@ -1051,6 +1114,8 @@ function App() {
     setOpenQuestionId("");
     setReplyingTo({ questionId: "", parentId: "" });
     setCommentDraft("");
+    setEditingComment({ questionId: "", commentId: "" });
+    setEditCommentDraft("");
   }, [boardSearch, boardStatus]);
 
   const sortedLots = useMemo(() => {
@@ -1506,6 +1571,7 @@ function App() {
   }
 
   function startCommentReply(questionId, parentId) {
+    cancelCommentEdit();
     setReplyingTo({ questionId, parentId });
     setCommentDraft("");
   }
@@ -1513,6 +1579,52 @@ function App() {
   function cancelCommentReply() {
     setReplyingTo({ questionId: "", parentId: "" });
     setCommentDraft("");
+  }
+
+  function startCommentEdit(questionId, comment) {
+    cancelCommentReply();
+    setEditingComment({ questionId, commentId: comment.id });
+    setEditCommentDraft(comment.body);
+  }
+
+  function cancelCommentEdit() {
+    setEditingComment({ questionId: "", commentId: "" });
+    setEditCommentDraft("");
+  }
+
+  function saveCommentEdit(event, questionId) {
+    event.preventDefault();
+    const body = editCommentDraft.trim();
+    if (!body || editingComment.questionId !== questionId || !editingComment.commentId) return;
+    setQuestions((current) => current.map((question) => {
+      if (question.id !== questionId) return question;
+      const comments = getQuestionComments(question).map((comment) => (
+        comment.id === editingComment.commentId ? { ...comment, body } : comment
+      ));
+      return { ...question, comments };
+    }));
+    cancelCommentEdit();
+  }
+
+  function deleteComment(questionId, commentId) {
+    const question = questions.find((item) => item.id === questionId);
+    const comments = getQuestionComments(question);
+    const removeIds = collectCommentBranchIds(comments, commentId);
+
+    if (replyingTo.questionId === questionId && replyingTo.parentId && removeIds.has(replyingTo.parentId)) {
+      cancelCommentReply();
+    }
+    if (editingComment.questionId === questionId && removeIds.has(editingComment.commentId)) {
+      cancelCommentEdit();
+    }
+
+    setQuestions((current) => current.map((item) => {
+      if (item.id !== questionId) return item;
+      return {
+        ...item,
+        comments: getQuestionComments(item).filter((comment) => !removeIds.has(comment.id)),
+      };
+    }));
   }
 
   function submitComment(event, questionId) {
@@ -1862,12 +1974,20 @@ function App() {
                         <p>{question.body}</p>
                         <BoardCommentSection
                           question={question}
+                          currentAuthor={getCurrentAuthor(member)}
                           replyingTo={replyingTo}
                           commentDraft={commentDraft}
+                          editingComment={editingComment}
+                          editCommentDraft={editCommentDraft}
                           onDraftChange={setCommentDraft}
                           onSubmit={submitComment}
                           onReply={startCommentReply}
                           onCancelReply={cancelCommentReply}
+                          onEditStart={startCommentEdit}
+                          onEditDraftChange={setEditCommentDraft}
+                          onEditSave={saveCommentEdit}
+                          onEditCancel={cancelCommentEdit}
+                          onDelete={deleteComment}
                         />
                       </div>
                     )}
