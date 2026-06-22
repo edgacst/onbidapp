@@ -146,12 +146,25 @@ function cleanQuickKeyword(value, usageCode, disposition) {
     .trim();
 }
 
+function formatLotIdFromDigits(digits) {
+  if (digits.length === 12) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 9)}-${digits.slice(9)}`;
+  }
+  if (digits.length === 13) {
+    return `${digits.slice(0, 5)}-${digits.slice(5, 10)}-${digits.slice(10)}`;
+  }
+  if (digits.length === 14) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 8)}-${digits.slice(8)}`;
+  }
+  return digits;
+}
+
 function normalizeLotId(value) {
   const text = String(value || "").trim();
-  if (isOnbidLotId(text)) return text;
+  if (/^\d{4,5}-\d{4,5}-\d{3,6}$/.test(text)) return text;
   const digits = text.replace(/[^\d]/g, "");
-  if (digits.length === 14) {
-    return `${digits.slice(0, 4)}-${digits.slice(4, 9)}-${digits.slice(9)}`;
+  if (digits.length === 12 || digits.length === 13 || digits.length === 14) {
+    return formatLotIdFromDigits(digits);
   }
   return text;
 }
@@ -338,7 +351,10 @@ function assetTypeFromLotId(id) {
 }
 
 function isOnbidLotId(value) {
-  return /^\d{4}-\d{4}-\d{6}$/.test(String(value || "").trim());
+  const text = String(value || "").trim();
+  if (/^\d{4,5}-\d{4,5}-\d{3,6}$/.test(text)) return true;
+  const digits = text.replace(/[^\d]/g, "");
+  return digits.length === 12 || digits.length === 13 || digits.length === 14;
 }
 
 function toOnbidFileProxy(url) {
@@ -716,6 +732,24 @@ async function fetchOnbidDetail(filters, lot) {
   return normalizeDetail(payload);
 }
 
+async function fetchLotByManagementNo(lotId, preferredAssetType = "realty") {
+  if (!lotId) return null;
+  const assetTypes = [preferredAssetType, "realty", "movable", "car"].filter((type, index, types) => types.indexOf(type) === index);
+
+  for (const assetType of assetTypes) {
+    try {
+      const detail = await fetchOnbidDetail({ assetType }, { id: lotId, conditionNo: "" });
+      const item = detail?.item;
+      if (!item || !Object.keys(item).length) continue;
+      const [lot] = normalizeItems({ response: { body: { items: { item } } } }, assetType);
+      if (lot?.id) return lot;
+    } catch {
+      // Try the next asset type or fall back to list lookup.
+    }
+  }
+  return null;
+}
+
 function App() {
   const [view, setView] = useState("home");
   const [statusFocus, setStatusFocus] = useState("");
@@ -887,10 +921,11 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      const keywordLotId = isOnbidLotId(filters.keyword) ? filters.keyword.trim() : "";
+      const keywordLotId = isOnbidLotId(filters.keyword) ? normalizeLotId(filters.keyword.trim()) : "";
       if (keywordLotId && !filters.statusCode) {
         const assetType = assetTypeFromLotId(keywordLotId);
-        const foundLot = await findOnbidLotById({ ...filters, assetType }, keywordLotId);
+        const foundLot = await fetchLotByManagementNo(keywordLotId, assetType)
+          ?? await findOnbidLotById({ ...filters, assetType }, keywordLotId);
         if (foundLot) {
           setHomeAssetType(assetType);
           if (assetType !== "realty") {
@@ -902,12 +937,24 @@ function App() {
           setStatusTotals({ available: 1, ready: matchesStatusFocus(foundLot, "ready") ? 1 : 0, sold: 0, failed: 0 });
           return;
         }
+
+        setHomeAssetType(assetType);
+        setData({ lots: [], pageNo: 1, numOfRows: PAGE_SIZE, totalCount: 0, sample: false });
+        setSelectedId(keywordLotId);
+        setStatusTotals({ available: 0, ready: 0, sold: 0, failed: 0 });
+        if (filters.preserveSelectedId) return;
+
+        setError("해당 물건관리번호를 찾지 못했습니다. 번호를 확인하거나 온비드에서 직접 조회해보세요.");
+        return;
       }
       const result = filters.statusCode === "0010" || filters.statusCode === "0011"
         ? await fetchOnbidResultLots(filters)
         : await fetchOnbidLots(filters);
       if (filters.preserveSelectedId && !result.lots.some((lot) => lot.id === filters.preserveSelectedId)) {
-        const foundLot = await findOnbidLotById(filters, filters.preserveSelectedId).catch(() => null);
+        const normalizedId = normalizeLotId(filters.preserveSelectedId);
+        const foundLot = await fetchLotByManagementNo(normalizedId, assetTypeFromLotId(normalizedId))
+          .catch(() => null)
+          ?? await findOnbidLotById(filters, normalizedId).catch(() => null);
         if (foundLot) {
           result.lots = [foundLot, ...result.lots.filter((lot) => lot.id !== foundLot.id)];
           result.totalCount = Math.max(result.totalCount || 0, result.lots.length);
