@@ -44,9 +44,16 @@ app.use(
       proxyReq.setHeader("Referer", "https://www.onbid.co.kr/");
       proxyReq.setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
     },
-    onProxyRes(proxyRes) {
+    onProxyRes(proxyRes, req) {
       delete proxyRes.headers["content-disposition"];
       proxyRes.headers["cache-control"] = "public, max-age=3600";
+      const requestPath = req?.url || "";
+      if (requestPath.includes("dnldFile.do")) {
+        const contentType = String(proxyRes.headers["content-type"] || "");
+        if (!contentType.startsWith("image/")) {
+          proxyRes.headers["content-type"] = "image/jpeg";
+        }
+      }
     },
   }),
 );

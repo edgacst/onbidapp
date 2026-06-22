@@ -435,7 +435,8 @@ function extractPhotoUrl(source) {
   if (!source) return "";
   if (typeof source === "string") return toOnbidFileProxy(source);
   return toOnbidFileProxy(
-    source.potoUrlAdr
+    source.cltrPotoUrlAdr
+    || source.potoUrlAdr
     || source.urlAdr
     || source.imgUrl
     || source.thnlImgUrlAdr
@@ -443,8 +444,78 @@ function extractPhotoUrl(source) {
     || source.fileUrl
     || source.atchFileUrl
     || source.cltrImgUrl
+    || source.potoUrl
     || "",
   );
+}
+
+function parseOnbidFileDownloadUrl(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url, "https://www.onbid.co.kr");
+    if (!parsed.pathname.includes("dnldFile.do")) return null;
+    const atchFileLstNo = parsed.searchParams.get("atchFileLstNo");
+    const hashCrpsNo = parsed.searchParams.get("hashCrpsNo");
+    if (!atchFileLstNo || !hashCrpsNo) return null;
+    return {
+      atchFileLstNo,
+      hashCrpsNo,
+      path: parsed.pathname,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildOnbidFileDownloadUrl(meta, atchSn, downloadImageKind = "ORGNL_NM") {
+  const query = new URLSearchParams({
+    atchFileLstNo: meta.atchFileLstNo,
+    atchSn: String(atchSn),
+    hashCrpsNo: meta.hashCrpsNo,
+    downloadImageKind,
+  });
+  return toOnbidFileProxy(`${meta.path}?${query.toString()}`);
+}
+
+const galleryPhotoCache = new Map();
+
+async function probeOnbidPhotoUrl(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!response.ok) return false;
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("text/html")) return false;
+    const blob = await response.blob();
+    return blob.size > 10000;
+  } catch {
+    return false;
+  }
+}
+
+async function probeGalleryFromThumbnail(thumbnailUrl) {
+  const meta = parseOnbidFileDownloadUrl(thumbnailUrl);
+  if (!meta) return [];
+
+  const cacheKey = `${meta.atchFileLstNo}:${meta.hashCrpsNo}`;
+  if (galleryPhotoCache.has(cacheKey)) {
+    return galleryPhotoCache.get(cacheKey);
+  }
+
+  const checks = await Promise.all(
+    Array.from({ length: 20 }, (_, index) => index + 1).map(async (atchSn) => {
+      const url = buildOnbidFileDownloadUrl(meta, atchSn, "ORGNL_NM");
+      return (await probeOnbidPhotoUrl(url)) ? url : null;
+    }),
+  );
+
+  const photos = [];
+  for (const url of checks) {
+    if (!url) break;
+    photos.push(url);
+  }
+
+  galleryPhotoCache.set(cacheKey, photos);
+  return photos;
 }
 
 function isLikelyImageUrl(url) {
@@ -466,11 +537,20 @@ function collectDetailPhotos(item) {
     item.cltrImgList,
     item.potoList,
     item.cltrPotoList,
+    item.poto360DgrUrlList,
   ];
 
   const photos = [];
   for (const bucket of buckets) {
     for (const entry of asArray(bucket?.item ?? bucket)) {
+      const url = extractPhotoUrl(entry);
+      if (url && isLikelyImageUrl(url)) photos.push(url);
+    }
+  }
+
+  for (const [key, value] of Object.entries(item)) {
+    if (!/poto|photo|pic|img/i.test(key) || /thnl|imgurladr$/i.test(key)) continue;
+    for (const entry of asArray(value?.item ?? value)) {
       const url = extractPhotoUrl(entry);
       if (url && isLikelyImageUrl(url)) photos.push(url);
     }
@@ -487,6 +567,19 @@ function resolveLotPhotos(lot, detail) {
   const listThumb = extractPhotoUrl(lot?.thumbnail);
   if (listThumb && !photos.includes(listThumb)) photos.unshift(listThumb);
   return photos;
+}
+
+async function resolveLotPhotosForDisplay(lot, detail) {
+  const fromDetail = resolveLotPhotos(lot, detail);
+  if (fromDetail.length > 1) return fromDetail;
+
+  const thumbnail = extractPhotoUrl(lot?.thumbnail);
+  if (!thumbnail) return fromDetail;
+
+  const fromAttachment = await probeGalleryFromThumbnail(thumbnail);
+  if (fromAttachment.length) return fromAttachment;
+
+  return fromDetail.length ? fromDetail : [thumbnail];
 }
 
 function AuctionImage({ src, fallbackSrc = "", alt, className = "" }) {
@@ -1017,6 +1110,8 @@ function App() {
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [galleryPhotos, setGalleryPhotos] = useState([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
   const [error, setError] = useState("");
   const [member, setMember] = useState(() => {
     try {
@@ -1178,7 +1273,7 @@ function App() {
         }
       : sortedLots[0]);
   const links = selected ? mapLinks(selected) : null;
-  const displayPhotos = selected ? resolveLotPhotos(selected, detail) : [];
+  const displayPhotos = galleryPhotos;
   const totalMinimum = sortedLots.reduce((sum, lot) => sum + (lot.minimum ?? 0), 0);
   const averageDiscount = Math.round(sortedLots.reduce((sum, lot) => sum + lot.discount, 0) / sortedLots.length || 0);
   const visibleTotal = statusFocus || checkMode || view === "watch" ? sortedLots.length : data.totalCount || sortedLots.length;
@@ -1364,6 +1459,29 @@ function App() {
       cancelled = true;
     };
   }, [selected?.id, selected?.conditionNo, selected?.assetType, data.sample]);
+
+  useEffect(() => {
+    if (!selected || data.sample) {
+      setGalleryPhotos([]);
+      setGalleryLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setGalleryLoading(true);
+
+    resolveLotPhotosForDisplay(selected, detail)
+      .then((photos) => {
+        if (!cancelled) setGalleryPhotos(photos);
+      })
+      .finally(() => {
+        if (!cancelled) setGalleryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id, selected?.thumbnail, selected?.conditionNo, detail, data.sample]);
 
   function submitSearch(event) {
     event.preventDefault();
@@ -2117,10 +2235,13 @@ function App() {
             <button className="back-button" onClick={() => openView("search")}>목록으로</button>
             <article className="detail-panel detail-page-panel">
               <div className="photo-strip">
+                {galleryLoading && displayPhotos.length === 0 && (
+                  <div className="photo-empty loading">사진 불러오는 중</div>
+                )}
                 {displayPhotos.map((src, index) => (
                   <AuctionImage key={`${src}-${index}`} src={src} alt={`${selected.title} 사진 ${index + 1}`} />
                 ))}
-                {!displayPhotos.length && <div className="photo-empty">사진 없음</div>}
+                {!galleryLoading && !displayPhotos.length && <div className="photo-empty">사진 없음</div>}
               </div>
 
               <div className="detail-head">
@@ -2358,10 +2479,13 @@ function App() {
           {selected && (
             <aside className="detail-panel">
               <div className="photo-strip">
+                {galleryLoading && displayPhotos.length === 0 && (
+                  <div className="photo-empty loading">사진 불러오는 중</div>
+                )}
                 {displayPhotos.map((src, index) => (
                   <AuctionImage key={`${src}-${index}`} src={src} alt={`${selected.title} 사진 ${index + 1}`} />
                 ))}
-                {!displayPhotos.length && <div className="photo-empty">사진 없음</div>}
+                {!galleryLoading && !displayPhotos.length && <div className="photo-empty">사진 없음</div>}
               </div>
 
               <div className="detail-head">
