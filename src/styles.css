@@ -865,6 +865,13 @@ a {
   border-radius: 7px;
   background: #fff;
   padding: 0 10px;
+  width: 100%;
+}
+
+.home-filter-grid select:disabled {
+  background: #f3f5f7;
+  color: #8a97a3;
+  cursor: not-allowed;
 }
 
 .filter-choice {

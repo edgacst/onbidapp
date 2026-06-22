@@ -1244,42 +1244,31 @@ function App() {
                   <div className="home-filter-grid">
                     <div>
                       <strong>처분방식</strong>
-                      {homeDispositions.map((item) => (
-                        <button
-                          key={item.value}
-                          className={`filter-choice ${homeDisposition === item.value ? "active" : ""}`}
-                          onClick={() => setHomeDisposition(item.value)}
-                          type="button"
-                        >
-                          {item.label}
-                        </button>
-                      ))}
+                      <select value={homeDisposition} onChange={(event) => setHomeDisposition(event.target.value)}>
+                        {homeDispositions.map((item) => (
+                          <option key={item.value} value={item.value}>{item.label}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <strong>용도</strong>
-                      {homeUsages.map((item) => (
-                        <button
-                          key={item.label}
-                          className={`filter-choice ${homeUsage === item.value ? "active" : ""}`}
-                          onClick={() => setHomeUsage(item.value)}
-                          type="button"
-                        >
-                          {item.label}
-                        </button>
-                      ))}
+                      <select
+                        value={homeUsage}
+                        onChange={(event) => setHomeUsage(event.target.value)}
+                        disabled={homeAssetType !== "realty"}
+                      >
+                        {homeUsages.map((item) => (
+                          <option key={item.label} value={item.value}>{item.label}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <strong>재산유형</strong>
-                      {propertyTypes.slice(0, 4).map((item) => (
-                        <button
-                          key={item.value}
-                          className={`filter-choice ${propertyType === item.value ? "active" : ""}`}
-                          onClick={() => setPropertyType(item.value)}
-                          type="button"
-                        >
-                          {item.label}
-                        </button>
-                      ))}
+                      <select value={propertyType} onChange={(event) => setPropertyType(event.target.value)}>
+                        {propertyTypes.map((item) => (
+                          <option key={item.value} value={item.value}>{item.label}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <strong>지역</strong>
