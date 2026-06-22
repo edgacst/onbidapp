@@ -512,19 +512,20 @@ function buildOnbidFileDownloadUrl(meta, atchSn, downloadImageKind = "ORGNL_NM")
 const galleryPhotoCache = new Map();
 
 async function probeOnbidPhotoUrl(url) {
-  const isImageType = (contentType) => {
+  const isImagePayload = (contentType, size) => {
     const type = String(contentType || "").toLowerCase();
-    return type.startsWith("image/") && !type.includes("text/html");
+    if (type.includes("text/html")) return false;
+    if (type.startsWith("image/")) return size > 10000;
+    if (type.includes("octet-stream") || type.includes("application/download")) return size > 10000;
+    return size > 10000;
   };
 
   try {
     const head = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(PHOTO_PROBE_TIMEOUT_MS) });
     if (head.ok) {
       const contentType = head.headers.get("content-type") || "";
-      if (!isImageType(contentType)) return false;
       const size = Number(head.headers.get("content-length") || 0);
-      if (size > 10000) return true;
-      if (size > 0) return false;
+      if (size > 0) return isImagePayload(contentType, size);
     }
   } catch {
     // HEAD 미지원 시 GET으로 확인
@@ -534,9 +535,8 @@ async function probeOnbidPhotoUrl(url) {
     const response = await fetch(url, { signal: AbortSignal.timeout(PHOTO_PROBE_TIMEOUT_MS) });
     if (!response.ok) return false;
     const contentType = response.headers.get("content-type") || "";
-    if (!isImageType(contentType)) return false;
     const blob = await response.blob();
-    return blob.size > 10000;
+    return isImagePayload(contentType, blob.size);
   } catch {
     return false;
   }
@@ -552,13 +552,20 @@ async function probeGalleryFromThumbnail(thumbnailUrl) {
   }
 
   const photos = [];
-  for (let atchSn = 1; atchSn <= 12; atchSn += 1) {
+  for (let atchSn = 1; atchSn <= 20; atchSn += 1) {
     const url = buildOnbidFileDownloadUrl(meta, atchSn, "ORGNL_NM");
     if (await probeOnbidPhotoUrl(url)) {
       photos.push(url);
-    } else if (photos.length) {
-      break;
+      continue;
     }
+
+    const thumbUrl = buildOnbidFileDownloadUrl(meta, atchSn, "THNL_NM");
+    if (thumbUrl !== url && await probeOnbidPhotoUrl(thumbUrl)) {
+      photos.push(thumbUrl);
+      continue;
+    }
+
+    if (photos.length) break;
   }
 
   galleryPhotoCache.set(cacheKey, photos);
@@ -618,15 +625,15 @@ function resolveLotPhotos(lot, detail) {
 
 async function resolveLotPhotosForDisplay(lot, detail) {
   const fromDetail = resolveLotPhotos(lot, detail);
+  const thumbnail = extractPhotoUrl(lot?.thumbnail);
+
   if (fromDetail.length > 1) return [...new Set(fromDetail)];
 
-  const thumbnail = extractPhotoUrl(lot?.thumbnail);
-  if (!thumbnail) return fromDetail;
+  const fromAttachment = thumbnail ? await probeGalleryFromThumbnail(thumbnail) : [];
+  const merged = [...new Set([...fromAttachment, ...fromDetail, thumbnail].filter(Boolean))];
+  if (merged.length) return merged;
 
-  const fromAttachment = await probeGalleryFromThumbnail(thumbnail);
-  if (fromAttachment.length) return [...new Set(fromAttachment)];
-
-  return fromDetail.length ? fromDetail : [thumbnail];
+  return fromDetail.length ? fromDetail : (thumbnail ? [thumbnail] : []);
 }
 
 function dedupePhotos(photos) {
@@ -796,25 +803,15 @@ function LotDetailPanel({
   const [usePyeong, setUsePyeong] = useState(false);
   const [activeTab, setActiveTab] = useState("spec");
   const [photoIndex, setPhotoIndex] = useState(0);
-  const [validPhotos, setValidPhotos] = useState([]);
 
   useEffect(() => {
-    setValidPhotos(dedupePhotos(photos));
     setPhotoIndex(0);
     setMediaMode("photo");
   }, [photos, lot?.id]);
 
-  const dropPhoto = (index) => {
-    setValidPhotos((current) => current.filter((_, photoIdx) => photoIdx !== index));
-    setPhotoIndex((current) => {
-      if (index < current) return current - 1;
-      if (index === current) return 0;
-      return current;
-    });
-  };
-
-  const photoCount = validPhotos.length;
-  const currentPhoto = validPhotos[photoIndex] || "";
+  const displayPhotos = dedupePhotos(photos);
+  const photoCount = displayPhotos.length;
+  const currentPhoto = displayPhotos[photoIndex] || "";
   const propertyTag = raw.prptDivNm || lot.tags[0] || "공매";
   const dispositionTag = raw.dspsMthodNm || lot.tags[1] || "매각";
   const usageTag = lot.subCategory || lot.category || "용도 확인";
@@ -852,7 +849,6 @@ function LotDetailPanel({
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"
-                onError={() => dropPhoto(photoIndex)}
               />
             )}
             {mediaMode === "map" && links?.embed && (
