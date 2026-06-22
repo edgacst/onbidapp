@@ -1225,23 +1225,22 @@ function App() {
                   <input value={quickKeyword} onChange={(event) => setQuickKeyword(event.target.value)} placeholder="검색어를 입력하세요." />
                   <button type="button" onClick={runQuickSearch} aria-label="검색"><Search size={22} /></button>
                 </label>
-                <div className="home-search-body">
-                  <div className="asset-tabs">
-                    {homeAssetTypes.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <button
-                          key={item.value}
-                          className={homeAssetType === item.value ? "active" : ""}
-                          onClick={() => selectHomeAssetType(item.value)}
-                          type="button"
-                        >
-                          <Icon size={18} /> {item.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="home-filter-grid">
+                <div className="asset-tabs">
+                  {homeAssetTypes.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.value}
+                        className={homeAssetType === item.value ? "active" : ""}
+                        onClick={() => selectHomeAssetType(item.value)}
+                        type="button"
+                      >
+                        <Icon size={18} /> {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="home-filter-grid">
                     <div>
                       <strong>처분방식</strong>
                       <select value={homeDisposition} onChange={(event) => setHomeDisposition(event.target.value)}>
@@ -1276,7 +1275,6 @@ function App() {
                         {regions.map((item) => <option key={item}>{item}</option>)}
                       </select>
                     </div>
-                  </div>
                 </div>
                 {homeAssetType === "car" && <p className="quick-note">차량 목록 API로 자동차·운송장비 물건을 조회합니다.</p>}
                 {homeAssetType === "movable" && <p className="quick-note">동산 목록 API로 기계·기구·물품 공매를 조회합니다.</p>}
