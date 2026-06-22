@@ -1,0 +1,22 @@
+{
+  "name": "onbid-auction-app",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "dev:phone": "node scripts/dev-phone.mjs",
+    "build": "node scripts/build.mjs",
+    "build:phone": "node scripts/build-phone.mjs",
+    "build:inner": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "5.1.1",
+    "express": "^4.22.2",
+    "http-proxy-middleware": "^3.0.7",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "7.3.5"
+  }
+}

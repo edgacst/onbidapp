@@ -1,0 +1,12 @@
+{
+  "name": "공매레이더",
+  "short_name": "공매레이더",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#f5f7f8",
+  "theme_color": "#1f6f62",
+  "lang": "ko-KR",
+  "icons": []
+}
