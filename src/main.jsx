@@ -88,6 +88,12 @@ const statusTiles = [
   { label: "유찰물건", value: "failed", icon: TrendingDown, tone: "red" },
 ];
 
+const assetTypeSearchTitle = {
+  realty: "부동산 공매 물건 탐색",
+  car: "차량 공매 물건 탐색",
+  movable: "동산 공매 물건 탐색",
+};
+
 const homeAssetTypes = [
   { label: "부동산", value: "realty", icon: Building2, image: "/images/asset-realty.png" },
   { label: "동산", value: "movable", icon: Landmark, image: "/images/asset-movable.png" },
@@ -1008,12 +1014,41 @@ function App() {
     setSaved((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
 
-  function selectHomeAssetType(nextType) {
+  function openAssetTypeSearch(nextType) {
+    setStatusFocus("");
+    setCheckMode(false);
+    setPageNo(1);
     setHomeAssetType(nextType);
+
+    const nextDspsMethod = dispositionCodes[homeDisposition] ?? "";
+    const nextUsageCategoryId = nextType === "realty" ? homeUsage : "";
     if (nextType !== "realty") {
       setHomeUsage("");
       setUsageCategoryId("");
+    } else {
+      setUsageCategoryId(nextUsageCategoryId);
     }
+    setDspsMethod(nextDspsMethod);
+
+    const nextKeyword = cleanQuickKeyword(quickKeyword, nextType === "realty" ? homeUsage : "", homeDisposition);
+    setKeyword(nextKeyword);
+    setQuickKeyword(nextKeyword);
+
+    pushAppHistory("search");
+    setView("search");
+    loadLots({
+      keyword: nextKeyword,
+      propertyType,
+      bidType,
+      privateContract,
+      region,
+      pageNo: 1,
+      numOfRows: PAGE_SIZE,
+      statusCode: "",
+      dspsMethod: nextDspsMethod,
+      usageCategoryId: nextUsageCategoryId,
+      assetType: nextType,
+    });
   }
 
   function pushAppHistory(nextView, nextSelectedId = selectedId) {
@@ -1173,7 +1208,7 @@ function App() {
           <div>
             <h1>
               {view === "home" && "공매레이더"}
-              {view === "search" && "부동산 공매 물건 탐색"}
+              {view === "search" && (assetTypeSearchTitle[homeAssetType] || assetTypeSearchTitle.realty)}
               {view === "detail" && "물건 상세"}
               {view === "watch" && "관심 물건"}
               {view === "map" && "지도 검색"}
@@ -1233,7 +1268,7 @@ function App() {
                         key={item.value}
                         className={`asset-tab-card ${homeAssetType === item.value ? "active" : ""}`}
                         style={{ backgroundImage: `url(${item.image})` }}
-                        onClick={() => selectHomeAssetType(item.value)}
+                        onClick={() => openAssetTypeSearch(item.value)}
                         type="button"
                       >
                         <span className="asset-tab-overlay" aria-hidden="true" />
