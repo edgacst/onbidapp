@@ -597,8 +597,12 @@ a {
 }
 
 .board-no {
-  color: #7b8791;
+  flex: 0 0 auto;
+  min-width: 24px;
+  color: #8a96a0;
+  font-size: 14px;
   font-weight: 800;
+  text-align: center;
 }
 
 .board-card mark {
@@ -635,6 +639,10 @@ a {
   gap: 8px;
 }
 
+.board-card:not(.expanded) .board-title:hover strong {
+  color: #3530b8;
+}
+
 .board-card.expanded .board-title strong {
   color: #151b23;
   white-space: normal;
@@ -664,16 +672,16 @@ a {
   color: #151b23;
   padding: 2px 0;
   text-align: left;
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
   width: 100%;
   cursor: pointer;
 }
 
-.board-card:not(.expanded) .board-title:hover strong {
-  color: #3530b8;
-}
-
 .board-title strong {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

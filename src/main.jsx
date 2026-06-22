@@ -1031,11 +1031,13 @@ function App() {
 
   const filteredQuestions = useMemo(() => {
     const query = boardSearch.trim().toLowerCase();
-    return questions.filter((question) => {
+    return questions
+      .filter((question) => {
       const statusOk = boardStatus === "all" || question.status === boardStatus;
       const queryOk = !query || [question.title, question.body, question.category, question.author].some((value) => String(value || "").toLowerCase().includes(query));
       return statusOk && queryOk;
-    });
+    })
+      .sort((a, b) => Number(b.number || 0) - Number(a.number || 0));
   }, [questions, boardSearch, boardStatus]);
 
   useEffect(() => {
@@ -1839,13 +1841,13 @@ function App() {
                       aria-expanded={isOpen}
                       onClick={() => toggleQuestion(question.id)}
                     >
+                      <span className="board-no">{question.number ?? "-"}</span>
                       <strong>{question.title || question.body}</strong>
                     </button>
                     {isOpen && (
                       <div className="board-body">
                         <div className="board-card-top">
                           <div className="board-card-tags">
-                            <span className="board-no">#{question.number || "-"}</span>
                             <mark>{question.category || "일반"}</mark>
                           </div>
                           <span className={`board-status ${question.status === "답변완료" ? "done" : ""}`}>{question.status}</span>
