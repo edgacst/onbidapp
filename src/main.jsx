@@ -42,7 +42,13 @@ const ONBID_MOVABLE_LIST_PATH = "/B010003/OnbidMvastListSrvc2/getMvastCltrList2"
 const ONBID_MOVABLE_DETAIL_PATH = "/B010003/OnbidMvastDtlSrvc2/getMvastDtlInf2";
 const ONBID_RESULT_LIST_PATH = "/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsltList2";
 const PAGE_SIZE = 50;
+const API_FETCH_TIMEOUT_MS = 25000;
+const PHOTO_PROBE_TIMEOUT_MS = 8000;
 const detailResponseCache = new Map();
+
+function apiFetch(url, options = {}) {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(API_FETCH_TIMEOUT_MS) });
+}
 
 const propertyTypes = [
   { label: "압류재산", value: "0007" },
@@ -503,7 +509,21 @@ const galleryPhotoCache = new Map();
 
 async function probeOnbidPhotoUrl(url) {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    const head = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(PHOTO_PROBE_TIMEOUT_MS) });
+    if (head.ok) {
+      const contentType = head.headers.get("content-type") || "";
+      if (!contentType.includes("text/html")) {
+        const size = Number(head.headers.get("content-length") || 0);
+        if (size > 10000) return true;
+        if (size > 0) return false;
+      }
+    }
+  } catch {
+    // HEAD 미지원 시 GET으로 확인
+  }
+
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(PHOTO_PROBE_TIMEOUT_MS) });
     if (!response.ok) return false;
     const contentType = response.headers.get("content-type") || "";
     if (contentType.includes("text/html")) return false;
@@ -523,17 +543,14 @@ async function probeGalleryFromThumbnail(thumbnailUrl) {
     return galleryPhotoCache.get(cacheKey);
   }
 
-  const checks = await Promise.all(
-    Array.from({ length: 20 }, (_, index) => index + 1).map(async (atchSn) => {
-      const url = buildOnbidFileDownloadUrl(meta, atchSn, "ORGNL_NM");
-      return (await probeOnbidPhotoUrl(url)) ? url : null;
-    }),
-  );
-
   const photos = [];
-  for (const url of checks) {
-    if (!url) break;
-    photos.push(url);
+  for (let atchSn = 1; atchSn <= 12; atchSn += 1) {
+    const url = buildOnbidFileDownloadUrl(meta, atchSn, "ORGNL_NM");
+    if (await probeOnbidPhotoUrl(url)) {
+      photos.push(url);
+    } else if (photos.length) {
+      break;
+    }
   }
 
   galleryPhotoCache.set(cacheKey, photos);
@@ -827,7 +844,7 @@ async function fetchOnbidLots(filters) {
   if (filters.usageCategoryId) params.set("cltrUsgMclsCtgrId", filters.usageCategoryId);
 
   const url = `${API_BASE}${listPath}?${params.toString()}`;
-  const response = await fetch(url);
+  const response = await apiFetch(url);
   const text = await response.text();
 
   if (!response.ok) {
@@ -855,34 +872,43 @@ async function fetchOnbidLots(filters) {
 }
 
 async function fetchLotFromListByManagementNo(lotId, assetType) {
+  const baseFilters = {
+    assetType,
+    managementNo: lotId,
+    propertyType: "",
+    privateContract: "",
+    pageNo: 1,
+    numOfRows: 10,
+    keyword: "",
+    region: "전체",
+    bidType: "",
+    statusCode: "",
+    dspsMethod: "",
+    usageCategoryId: "",
+  };
+
+  try {
+    const result = await fetchOnbidLots(baseFilters);
+    const direct = result.lots.find((lot) => lot.id === lotId);
+    if (direct) return direct;
+  } catch {
+    // 물건관리번호 단건 조회 실패 시 아래 조합 검색으로 폴백
+  }
+
   const propertyTypes = assetType === "movable"
     ? ["0007", "0010", "0005", "0004", "0002"]
     : ["0007", "0010", "0005", "0002", "0008"];
 
   for (const propertyType of propertyTypes) {
-    const hits = await Promise.all(["N", "Y"].map(async (privateContract) => {
+    for (const privateContract of ["N", "Y"]) {
       try {
-        const result = await fetchOnbidLots({
-          assetType,
-          managementNo: lotId,
-          propertyType,
-          privateContract,
-          pageNo: 1,
-          numOfRows: 10,
-          keyword: "",
-          region: "전체",
-          bidType: "",
-          statusCode: "",
-          dspsMethod: "",
-          usageCategoryId: "",
-        });
-        return result.lots.find((lot) => lot.id === lotId) ?? null;
+        const result = await fetchOnbidLots({ ...baseFilters, propertyType, privateContract });
+        const found = result.lots.find((lot) => lot.id === lotId);
+        if (found) return found;
       } catch {
-        return null;
+        // 다음 조합 시도
       }
-    }));
-    const found = hits.find(Boolean);
-    if (found) return found;
+    }
   }
   return null;
 }
@@ -903,19 +929,20 @@ async function fetchLotByManagementNo(lotId, preferredAssetType = "realty") {
   if (!lotId) return null;
 
   const lookupAssetType = async (assetType) => {
-    const [fromList, fromDetail] = await Promise.all([
-      fetchLotFromListByManagementNo(lotId, assetType),
-      fetchLotFromDetail(lotId, assetType),
-    ]);
-    return fromList ?? fromDetail ?? null;
+    const fromList = await fetchLotFromListByManagementNo(lotId, assetType);
+    if (fromList) return fromList;
+    return fetchLotFromDetail(lotId, assetType);
   };
 
   const preferred = await lookupAssetType(preferredAssetType);
   if (preferred) return preferred;
 
   const otherTypes = ["realty", "movable", "car"].filter((type) => type !== preferredAssetType);
-  const others = await Promise.all(otherTypes.map((assetType) => lookupAssetType(assetType)));
-  return others.find(Boolean) ?? null;
+  for (const assetType of otherTypes) {
+    const found = await lookupAssetType(assetType);
+    if (found) return found;
+  }
+  return null;
 }
 
 async function fetchOnbidResultLots(filters) {
@@ -937,7 +964,7 @@ async function fetchOnbidResultLots(filters) {
   if (filters.usageCategoryId) params.set("cltrUsgMclsCtgrId", filters.usageCategoryId);
 
   const url = `${API_BASE}${ONBID_RESULT_LIST_PATH}?${params.toString()}`;
-  const response = await fetch(url);
+  const response = await apiFetch(url);
   const text = await response.text();
 
   if (!response.ok) {
@@ -983,7 +1010,7 @@ async function fetchOnbidDetail(filters, lot) {
   });
   if (lot.conditionNo) params.set("pbctCdtnNo", String(lot.conditionNo));
 
-  const response = await fetch(`${API_BASE}${detailPath}?${params.toString()}`);
+  const response = await apiFetch(`${API_BASE}${detailPath}?${params.toString()}`);
   const text = await response.text();
   if (!response.ok) {
     if (response.status === 403) throw new Error("부동산 물건상세 조회서비스가 이 키에 아직 승인되지 않았습니다.");
@@ -1364,7 +1391,29 @@ function App() {
   async function loadLots(filters = activeFilters) {
     setLoading(true);
     setError("");
+    let loadingGuard = null;
     try {
+      loadingGuard = window.setTimeout(() => {
+        setLoading(false);
+      }, API_FETCH_TIMEOUT_MS + 5000);
+
+      const preserveId = filters.preserveSelectedId ? normalizeLotId(filters.preserveSelectedId) : "";
+      if (preserveId && !filters.keyword?.trim() && !filters.statusCode) {
+        const assetType = filters.assetType || assetTypeFromLotId(preserveId);
+        const foundLot = await fetchLotByManagementNo(preserveId, assetType);
+        if (foundLot) {
+          setHomeAssetType(foundLot.assetType || assetType);
+          if ((foundLot.assetType || assetType) !== "realty") {
+            setHomeUsage("");
+            setUsageCategoryId("");
+          }
+          setData({ lots: [foundLot], pageNo: 1, numOfRows: PAGE_SIZE, totalCount: 1, sample: false });
+          setSelectedId(preserveId);
+          setStatusTotals({ available: 1, ready: matchesStatusFocus(foundLot, "ready") ? 1 : 0, sold: 0, failed: 0 });
+          return;
+        }
+      }
+
       const keywordLotId = isOnbidLotId(filters.keyword) ? normalizeLotId(filters.keyword.trim()) : "";
       if (keywordLotId && !filters.statusCode) {
         const assetType = assetTypeFromLotId(keywordLotId);
@@ -1428,6 +1477,7 @@ function App() {
       }
       setError(err instanceof Error ? err.message : "온비드 API 호출에 실패했습니다.");
     } finally {
+      if (loadingGuard) window.clearTimeout(loadingGuard);
       setLoading(false);
     }
   }
@@ -1527,7 +1577,7 @@ function App() {
   }, [selected?.id, selected?.conditionNo, selected?.assetType, data.sample]);
 
   useEffect(() => {
-    if (!selected || data.sample) {
+    if (!selected || data.sample || loading) {
       setGalleryPhotos([]);
       setGalleryLoading(false);
       return undefined;
@@ -1547,7 +1597,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [selected?.id, selected?.thumbnail, selected?.conditionNo, detail, data.sample]);
+  }, [selected?.id, selected?.thumbnail, selected?.conditionNo, detail, data.sample, loading]);
 
   function submitSearch(event) {
     event.preventDefault();
