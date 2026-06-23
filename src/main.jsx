@@ -1739,7 +1739,7 @@ function LotDetailPanel({
         const tabId = hit?.target?.getAttribute("data-tab-id");
         if (tabId) setActiveTab(tabId);
       },
-      { root: null, rootMargin: "-52px 0px -55% 0px", threshold: [0, 0.15, 0.4, 0.7] },
+      { root: null, rootMargin: "-100px 0px -55% 0px", threshold: [0, 0.15, 0.4, 0.7] },
     );
 
     sections.forEach((section) => observer.observe(section));
@@ -4487,6 +4487,21 @@ function App() {
           </section>
         ) : view === "detail" && selected ? (
           <section className="detail-page">
+            <header className="detail-mobile-header">
+              <button type="button" className="detail-mobile-back" onClick={() => openView("search")}>
+                <ChevronLeft size={22} />
+                <span>목록</span>
+              </button>
+              <p className="detail-mobile-title">{selected.id}</p>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="관심 물건 저장"
+                onClick={() => toggleSaved(selected.id)}
+              >
+                <Heart size={20} fill={saved.includes(selected.id) ? "currentColor" : "none"} />
+              </button>
+            </header>
             <button className="back-button" onClick={() => openView("search")}>목록으로</button>
             <LotDetailPanel
               lot={selectedLot}
