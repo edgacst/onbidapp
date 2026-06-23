@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Clock3,
   Download,
   ExternalLink,
@@ -17,6 +18,7 @@ import {
   Heart,
   Home,
   Landmark,
+  LayoutDashboard,
   Loader2,
   Map as MapIcon,
   MapPin,
@@ -198,7 +200,44 @@ function parseRegionFromKeyword(keyword) {
   };
 }
 
-const appViews = ["home", "search", "watch", "map", "board", "login", "signup", "mypage", "detail"];
+const appViews = ["home", "search", "watch", "map", "board", "notice", "admin", "login", "signup", "mypage", "detail"];
+
+const defaultNotices = [
+  {
+    id: "notice-1",
+    title: "공매레이더 서비스 이용 안내",
+    body: "온비드 공매 물건 조회, 관심 물건 저장, 질문게시판 기능을 이용할 수 있습니다. 상세 정보는 온비드 원문과 함께 확인해주세요.",
+    createdAt: "2026.06.01",
+    pinned: true,
+    author: "관리자",
+  },
+  {
+    id: "notice-2",
+    title: "온비드 API 데이터 안내",
+    body: "목록·상세 API는 공공데이터포털 승인 범위 내에서 제공됩니다. 일부 종료·낙찰 물건은 상세 API에서 조회되지 않을 수 있습니다.",
+    createdAt: "2026.06.15",
+    pinned: false,
+    author: "관리자",
+  },
+];
+
+function isAdminAccount(email, password) {
+  return String(email || "").trim().toLowerCase() === "admin@gongmae.local"
+    && String(password || "") === "admin1234";
+}
+
+function isAdminMember(member) {
+  return member?.role === "admin";
+}
+
+function formatNoticeDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "");
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}.${month}.${day}`;
+}
 
 function parseAppHash(rawHash = "") {
   const trimmed = String(rawHash || "").replace(/^#/, "").trim();
@@ -2261,6 +2300,21 @@ function App() {
   const [editingComment, setEditingComment] = useState({ questionId: "", commentId: "" });
   const [editCommentDraft, setEditCommentDraft] = useState("");
   const [questionForm, setQuestionForm] = useState({ title: "", body: "", category: "물건검토" });
+  const [notices, setNotices] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("auctionNotices") || "[]");
+      if (stored.length) return stored;
+    } catch {
+      // ignore malformed localStorage
+    }
+    return defaultNotices;
+  });
+  const [openNoticeId, setOpenNoticeId] = useState("");
+  const [noticeWriteOpen, setNoticeWriteOpen] = useState(false);
+  const [noticeForm, setNoticeForm] = useState({ title: "", body: "", pinned: false });
+  const [searchFiltersOpen, setSearchFiltersOpen] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 961px)").matches,
+  );
   const [questions, setQuestions] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem("auctionQuestions") || "[]");
@@ -2348,6 +2402,13 @@ function App() {
     })
       .sort((a, b) => Number(b.number || 0) - Number(a.number || 0));
   }, [questions, boardSearch, boardStatus]);
+
+  const sortedNotices = useMemo(() => {
+    return [...notices].sort((a, b) => {
+      if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
+      return String(b.createdAt).localeCompare(String(a.createdAt));
+    });
+  }, [notices]);
 
   useEffect(() => {
     setOpenQuestionId("");
@@ -2542,6 +2603,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("auctionQuestions", JSON.stringify(questions));
   }, [questions]);
+
+  useEffect(() => {
+    localStorage.setItem("auctionNotices", JSON.stringify(notices));
+  }, [notices]);
 
   useEffect(() => {
     if (member) localStorage.setItem("auctionMember", JSON.stringify(member));
@@ -2894,10 +2959,65 @@ function App() {
     event.preventDefault();
     const name = authForm.name.trim() || authForm.email.split("@")[0] || "회원";
     const email = authForm.email.trim() || "guest@local.app";
-    setMember({ name, email, joinedAt: new Date().toISOString() });
+    const role = isAdminAccount(email, authForm.password) ? "admin" : "member";
+    setMember({ name, email, joinedAt: new Date().toISOString(), role });
     setAuthForm({ name: "", email: "", password: "" });
-    pushAppHistory("mypage");
-    setView("mypage");
+    pushAppHistory(role === "admin" ? "admin" : "mypage");
+    setView(role === "admin" ? "admin" : "mypage");
+  }
+
+  function openNoticeBoard() {
+    pushAppHistory("notice");
+    setView("notice");
+  }
+
+  function openAdminDashboard() {
+    if (!isAdminMember(member)) {
+      openView("login");
+      return;
+    }
+    pushAppHistory("admin");
+    setView("admin");
+  }
+
+  function toggleNotice(noticeId) {
+    setOpenNoticeId((current) => (current === noticeId ? "" : noticeId));
+  }
+
+  function openNoticeWrite() {
+    if (!isAdminMember(member)) return;
+    setNoticeWriteOpen(true);
+  }
+
+  function closeNoticeWrite() {
+    setNoticeWriteOpen(false);
+    setNoticeForm({ title: "", body: "", pinned: false });
+  }
+
+  function submitNotice(event) {
+    event.preventDefault();
+    if (!isAdminMember(member)) return;
+    const title = noticeForm.title.trim();
+    const body = noticeForm.body.trim();
+    if (!title || !body) return;
+    setNotices((current) => [
+      {
+        id: `notice-${Date.now()}`,
+        title,
+        body,
+        pinned: Boolean(noticeForm.pinned),
+        author: member?.name || "관리자",
+        createdAt: formatNoticeDate(),
+      },
+      ...current,
+    ]);
+    closeNoticeWrite();
+  }
+
+  function deleteNotice(noticeId) {
+    if (!isAdminMember(member)) return;
+    setNotices((current) => current.filter((notice) => notice.id !== noticeId));
+    if (openNoticeId === noticeId) setOpenNoticeId("");
   }
 
   function openBoardWrite() {
@@ -3036,6 +3156,10 @@ function App() {
           <button className={view === "watch" ? "active" : ""} onClick={() => openView("watch")}><Heart size={18} /> 관심</button>
           <button className={view === "map" ? "active" : ""} onClick={() => openView("map")}><MapIcon size={18} /> 지도</button>
           <button className={view === "board" ? "active" : ""} onClick={() => openView("board")}><MessageCircleQuestion size={18} /> 질문</button>
+          <button className={view === "notice" ? "active" : ""} onClick={openNoticeBoard}><Bell size={18} /> 공지</button>
+          {isAdminMember(member) && (
+            <button className={view === "admin" ? "active" : ""} onClick={openAdminDashboard}><LayoutDashboard size={18} /> 관리자</button>
+          )}
           <button className={view === "mypage" ? "active" : ""} onClick={() => openView("mypage")}><User size={18} /> 내정보</button>
         </nav>
       </aside>
@@ -3050,6 +3174,8 @@ function App() {
               {view === "watch" && "관심 물건"}
               {view === "map" && "지도 검색"}
               {view === "board" && "질문게시판"}
+              {view === "notice" && "공지사항"}
+              {view === "admin" && "관리자 대시보드"}
               {view === "login" && "로그인"}
               {view === "signup" && "회원가입"}
               {view === "mypage" && "마이페이지"}
@@ -3061,6 +3187,8 @@ function App() {
               {view === "watch" && "저장한 물건만 모아 다시 검토합니다."}
               {view === "map" && "선택한 물건의 위치와 외부 지도 링크를 중심으로 확인합니다."}
               {view === "board" && "공매 물건 검토 질문과 답변을 남깁니다."}
+              {view === "notice" && "서비스 안내와 변경사항을 확인합니다."}
+              {view === "admin" && "공지와 질문 현황을 관리합니다."}
               {view === "login" && "내 관심 물건과 질문 이력을 이어서 관리합니다."}
               {view === "signup" && "공매레이더 회원 정보를 만듭니다."}
               {view === "mypage" && "관심 물건, 질문, 계정 정보를 한곳에서 확인합니다."}
@@ -3188,7 +3316,10 @@ function App() {
               <button onClick={() => openView("board")}><MessageCircleQuestion size={22} /><strong>질문게시판</strong><span>질문 보기 · 새 작성하기</span></button>
               <button onClick={openBidCheck}><ShieldAlert size={22} /><strong>입찰참가 안내</strong><span>일정·가격·지분 체크</span></button>
               <button onClick={() => openStatus("sold")}><Star size={22} /><strong>낙찰결과</strong><span>최근 개찰 결과 확인</span></button>
-              <button onClick={() => openView("search")}><Bell size={22} /><strong>공지사항</strong><span>서비스 안내와 변경사항</span></button>
+              <button onClick={openNoticeBoard}><Bell size={22} /><strong>공지사항</strong><span>서비스 안내와 변경사항</span></button>
+              {isAdminMember(member) && (
+                <button onClick={openAdminDashboard}><LayoutDashboard size={22} /><strong>관리자 대시보드</strong><span>공지·질문 운영 관리</span></button>
+              )}
             </section>
 
             <div className="status-grid">
@@ -3392,6 +3523,170 @@ function App() {
               </div>
             )}
           </section>
+        ) : view === "notice" ? (
+          <section className="board-page notice-page">
+            <section className="board-hero">
+              <article className="board-summary-card board-summary-primary">
+                <span className="board-summary-label">공지사항</span>
+                <strong>{notices.length}건</strong>
+                <p>서비스 이용 안내와 업데이트 소식을 확인합니다.</p>
+              </article>
+              <article className="board-summary-card">
+                <span className="board-summary-label">고정 공지</span>
+                <strong>{notices.filter((notice) => notice.pinned).length}건</strong>
+                <p>중요한 안내는 상단에 고정해 표시합니다.</p>
+              </article>
+            </section>
+
+            <section className="board-main">
+              <div className="board-toolbar">
+                <div>
+                  <h2>공지사항</h2>
+                  <p>공매레이더 운영 안내와 변경사항을 확인하세요.</p>
+                </div>
+                {isAdminMember(member) && (
+                  <div className="board-toolbar-actions">
+                    <button className="board-write-button" type="button" onClick={openNoticeWrite}>
+                      <SquarePen size={18} /> 공지 작성
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="board-list" aria-label="공지 목록">
+                {sortedNotices.length === 0 && (
+                  <div className="board-empty">
+                    <Bell size={28} />
+                    <strong>등록된 공지가 없습니다.</strong>
+                  </div>
+                )}
+                {sortedNotices.map((notice) => {
+                  const isOpen = openNoticeId === notice.id;
+                  return (
+                  <article key={notice.id} className={`board-card ${isOpen ? "expanded" : ""}`}>
+                    <div className="board-row">
+                      <button type="button" className="board-title" aria-expanded={isOpen} onClick={() => toggleNotice(notice.id)}>
+                        {notice.pinned && <span className="notice-pin">고정</span>}
+                        <strong>{notice.title}</strong>
+                      </button>
+                      <div className="board-row-aside">
+                        <span className="board-author">{notice.author}</span>
+                        <span className="board-date">{notice.createdAt}</span>
+                        <ChevronDown size={18} className={`notice-chevron ${isOpen ? "open" : ""}`} />
+                      </div>
+                    </div>
+                    {isOpen && (
+                      <div className="board-body notice-item-body">
+                        <p>{notice.body}</p>
+                        {isAdminMember(member) && (
+                          <button type="button" className="board-comment-action danger" onClick={() => deleteNotice(notice.id)}>
+                            공지 삭제
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            {noticeWriteOpen && (
+              <div className="board-write-overlay" role="dialog" aria-modal="true">
+                <section className="board-write-panel">
+                  <div className="board-write-head">
+                    <h3>공지 작성</h3>
+                    <button type="button" className="icon-button" onClick={closeNoticeWrite} aria-label="닫기"><X size={18} /></button>
+                  </div>
+                  <form className="board-write-form" onSubmit={submitNotice}>
+                    <label>
+                      제목
+                      <input value={noticeForm.title} onChange={(event) => setNoticeForm((current) => ({ ...current, title: event.target.value }))} placeholder="공지 제목" />
+                    </label>
+                    <label>
+                      내용
+                      <textarea value={noticeForm.body} onChange={(event) => setNoticeForm((current) => ({ ...current, body: event.target.value }))} placeholder="공지 내용" rows={6} />
+                    </label>
+                    <label className="notice-pin-field">
+                      <input type="checkbox" checked={noticeForm.pinned} onChange={(event) => setNoticeForm((current) => ({ ...current, pinned: event.target.checked }))} />
+                      상단 고정
+                    </label>
+                    <div className="board-write-actions">
+                      <button className="secondary-action" type="button" onClick={closeNoticeWrite}>취소</button>
+                      <button className="primary-action" type="submit">등록하기</button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            )}
+          </section>
+        ) : view === "admin" ? (
+          <section className="board-page admin-page">
+            {!isAdminMember(member) ? (
+              <section className="service-card">
+                <h2>관리자 전용</h2>
+                <p>관리자 계정으로 로그인해야 대시보드를 이용할 수 있습니다.</p>
+                <p className="muted">관리자: admin@gongmae.local / admin1234</p>
+                <button className="primary-action" type="button" onClick={() => openView("login")}>로그인</button>
+              </section>
+            ) : (
+              <>
+                <section className="board-hero">
+                  <article className="board-summary-card board-summary-primary">
+                    <span className="board-summary-label">공지사항</span>
+                    <strong>{notices.length}건</strong>
+                    <p>고정 {notices.filter((notice) => notice.pinned).length}건</p>
+                  </article>
+                  <article className="board-summary-card">
+                    <span className="board-summary-label">질문게시판</span>
+                    <strong>{questions.length}건</strong>
+                    <p>답변대기 {questions.filter((question) => question.status === "답변대기").length}건</p>
+                  </article>
+                  <article className="board-summary-card board-summary-tip">
+                    <span className="board-summary-label">관심 물건</span>
+                    <strong>{saved.length}건</strong>
+                    <p>현재 기기에 저장된 관심 물건 수입니다.</p>
+                  </article>
+                </section>
+
+                <section className="admin-panel-grid">
+                  <section className="service-card">
+                    <div className="admin-panel-head">
+                      <h2>최근 공지</h2>
+                      <button type="button" className="plain-action" onClick={openNoticeWrite}>공지 작성</button>
+                    </div>
+                    <div className="question-list">
+                      {sortedNotices.slice(0, 5).map((notice) => (
+                        <article key={notice.id}>
+                          {notice.pinned && <span>고정</span>}
+                          <strong>{notice.title}</strong>
+                          <small>{notice.createdAt}</small>
+                        </article>
+                      ))}
+                    </div>
+                    <button className="secondary-action" type="button" onClick={openNoticeBoard}>공지사항 전체 보기</button>
+                  </section>
+
+                  <section className="service-card">
+                    <div className="admin-panel-head">
+                      <h2>최근 질문</h2>
+                      <button type="button" className="plain-action" onClick={() => openView("board")}>질문 관리</button>
+                    </div>
+                    <div className="question-list">
+                      {questions.slice(0, 5).map((question) => (
+                        <article key={question.id}>
+                          <span>{question.status}</span>
+                          <strong>{question.title || question.body}</strong>
+                          <small>{question.author} · {question.createdAt}</small>
+                        </article>
+                      ))}
+                      {questions.length === 0 && <p className="muted">등록된 질문이 없습니다.</p>}
+                    </div>
+                  </section>
+                </section>
+              </>
+            )}
+          </section>
         ) : view === "login" || view === "signup" ? (
           <section className="service-page narrow">
             <form className="service-card auth-form" onSubmit={submitAuth}>
@@ -3411,6 +3706,7 @@ function App() {
                 <input value={authForm.password} onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))} placeholder="비밀번호" type="password" />
               </label>
               <button className="primary-action" type="submit">{view === "signup" ? "가입하기" : "로그인"}</button>
+              {view === "login" && <p className="muted auth-admin-hint">관리자: admin@gongmae.local / admin1234</p>}
               <button className="secondary-action" type="button" onClick={() => openView(view === "signup" ? "login" : "signup")}>
                 {view === "signup" ? "이미 계정이 있어요" : "회원가입으로 이동"}
               </button>
@@ -3429,6 +3725,9 @@ function App() {
                 <button className="secondary-action" onClick={() => setMember(null)}>로그아웃</button>
               ) : (
                 <button className="primary-action" onClick={() => openView("login")}>로그인하기</button>
+              )}
+              {isAdminMember(member) && (
+                <button className="primary-action" type="button" onClick={openAdminDashboard}>관리자 대시보드</button>
               )}
             </section>
             <section className="service-card">
@@ -3485,12 +3784,25 @@ function App() {
             </section>
 
             <div className="explore-search-sticky">
-            <form className="controls api-controls" onSubmit={submitSearch}>
-          <label className="search-field">
-            <Search size={18} />
-            <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="물건명 검색" />
-          </label>
+            <form className="explore-search-form" onSubmit={submitSearch}>
+              <div className="explore-search-header">
+                <label className="search-field explore-search-main">
+                  <Search size={18} />
+                  <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="물건명 검색" />
+                </label>
+                <button
+                  type="button"
+                  className={`explore-search-toggle ${searchFiltersOpen ? "open" : ""}`}
+                  aria-expanded={searchFiltersOpen}
+                  aria-label={searchFiltersOpen ? "검색 필터 접기" : "검색 필터 펼치기"}
+                  onClick={() => setSearchFiltersOpen((open) => !open)}
+                >
+                  <ChevronDown size={18} />
+                </button>
+              </div>
 
+              <div className={`explore-search-filters ${searchFiltersOpen ? "is-open" : ""}`}>
+            <div className="controls api-controls">
           <label className="select-field">
             <SlidersHorizontal size={17} />
             <select value={propertyType} onChange={(event) => setPropertyType(event.target.value)}>
@@ -3531,6 +3843,8 @@ function App() {
             {loading ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
             {loading ? "검색 중..." : "조회"}
           </button>
+            </div>
+              </div>
             </form>
             </div>
 
