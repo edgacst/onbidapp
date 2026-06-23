@@ -1437,7 +1437,7 @@ function LotDetailPanel({
               </div>
               <div className="lot-detail-section">
                 <h4>지역</h4>
-                <table className="lot-detail-kv-table">
+                <table className="lot-detail-kv-table lot-detail-kv-inline">
                   <tbody>
                     <tr>
                       <th>지번</th>
@@ -1453,7 +1453,7 @@ function LotDetailPanel({
 
               <div className="lot-detail-section">
                 <h4>이용 현황</h4>
-                <table className="lot-detail-kv-table lot-detail-usage-table">
+                <table className="lot-detail-kv-table lot-detail-kv-inline lot-detail-usage-table">
                   <tbody>
                     {usageRows.map((row) => (
                       <tr key={row.label}>
@@ -1503,7 +1503,7 @@ function LotDetailPanel({
 
               <div className="lot-detail-section">
                 <h4>인도/인수 책임 및 부대조건</h4>
-                <table className="lot-detail-kv-table lot-detail-usage-table">
+                <table className="lot-detail-kv-table lot-detail-kv-inline lot-detail-usage-table">
                   <tbody>
                     {deliveryRows.map((row) => (
                       <tr key={row.label}>
