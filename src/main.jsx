@@ -370,6 +370,33 @@ function statusGroup(lot) {
   return "available";
 }
 
+function isResultLot(lot) {
+  const group = statusGroup(lot);
+  return group === "sold" || group === "failed";
+}
+
+function buildResultFields(lot) {
+  const raw = lot?.raw || {};
+  const group = statusGroup(lot);
+  const soldAmount = lot.soldAmount ?? parseMoney(raw.scfbAmt ?? raw.scsbidAmt ?? raw.bidPrc);
+  const lowestBid = lot.lowestBid ?? parseMoney(raw.lowstBidPrc ?? raw.lowstBidPrcIndctCont ?? raw.sfbidPrc);
+  const opbdDate = formatOnbidDate(raw.cltrOpbdDt ?? raw.opbdDt ?? raw.opbdDtm) || lot.starts || lot.ends || "-";
+  const validBidders = raw.vldBddrNope ?? raw.vldBddrCnt ?? "";
+  const soldRate = raw.scfbRate ?? raw.scsbidRate ?? "";
+  return {
+    group,
+    statusLabel: lot.status || (group === "sold" ? "낙찰" : group === "failed" ? "유찰" : "입찰결과"),
+    opbdDate,
+    soldAmount,
+    lowestBid,
+    appraised: lot.appraised,
+    discount: lot.discount,
+    validBidders,
+    soldRate,
+    failedCount: lot.failedCount ?? Number(raw.usbdNft ?? 0),
+  };
+}
+
 function matchesStatusFocus(lot, focus) {
   if (!focus) return true;
   const group = statusGroup(lot);
@@ -1119,18 +1146,22 @@ function LotDetailPanel({
   onToggleSaved,
   onBidCheck,
   layout = "page",
+  resultFocus = false,
 }) {
   const raw = lot?.raw || {};
   const detailItem = detail?.item || {};
+  const showResult = isResultLot(lot) || resultFocus;
+  const resultFields = showResult ? buildResultFields(lot) : null;
   const [mediaMode, setMediaMode] = useState("photo");
   const [usePyeong, setUsePyeong] = useState(false);
-  const [activeTab, setActiveTab] = useState("spec");
+  const [activeTab, setActiveTab] = useState(showResult ? "result" : "spec");
   const [photoIndex, setPhotoIndex] = useState(0);
   const [photoFallbacks, setPhotoFallbacks] = useState({});
   const sectionRefs = useRef({});
   const scrollingToTab = useRef(false);
 
   const detailTabs = [
+    ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
     { id: "spec", label: "세부정보" },
     { id: "seized", label: "압류재산정보" },
     { id: "bid", label: "입찰정보" },
@@ -1144,9 +1175,9 @@ function LotDetailPanel({
   }, [photos, lot?.id]);
 
   useEffect(() => {
-    setActiveTab("spec");
+    setActiveTab(showResult ? "result" : "spec");
     sectionRefs.current = {};
-  }, [lot?.id]);
+  }, [lot?.id, showResult]);
 
   function goToDetailTab(tabId) {
     setActiveTab(tabId);
@@ -1211,6 +1242,58 @@ function LotDetailPanel({
 
   return (
     <article className={`lot-detail-panel lot-detail-panel--${layout}`}>
+      {showResult && resultFields && (
+        <section
+          id="lot-detail-section-result"
+          data-tab-id="result"
+          className="lot-detail-result-card"
+          ref={(node) => { sectionRefs.current.result = node; }}
+          aria-labelledby="lot-detail-tab-result"
+        >
+          <h3 id="lot-detail-tab-result">낙찰결과</h3>
+          <div className="lot-detail-result-grid">
+            <div className="lot-detail-result-item">
+              <strong>결과</strong>
+              <span className={`lot-detail-result-status ${resultFields.group}`}>{resultFields.statusLabel}</span>
+            </div>
+            <div className="lot-detail-result-item">
+              <strong>개찰일시</strong>
+              <span>{resultFields.opbdDate}</span>
+            </div>
+            {resultFields.group === "sold" && (
+              <div className="lot-detail-result-item highlight">
+                <strong>낙찰가</strong>
+                <span>{formatFullMoney(resultFields.soldAmount)}</span>
+              </div>
+            )}
+            <div className="lot-detail-result-item">
+              <strong>최저입찰가</strong>
+              <span>{formatFullMoney(resultFields.lowestBid)}</span>
+            </div>
+            <div className="lot-detail-result-item">
+              <strong>감정평가액</strong>
+              <span>{formatFullMoney(resultFields.appraised)}</span>
+            </div>
+            {Number.isFinite(resultFields.discount) && resultFields.discount > 0 && (
+              <div className="lot-detail-result-item">
+                <strong>감정가 대비</strong>
+                <span>{resultFields.discount}%</span>
+              </div>
+            )}
+            {resultFields.validBidders !== "" && resultFields.validBidders != null && (
+              <div className="lot-detail-result-item">
+                <strong>유효입찰</strong>
+                <span>{resultFields.validBidders}명</span>
+              </div>
+            )}
+            <div className="lot-detail-result-item">
+              <strong>유찰횟수</strong>
+              <span>{resultFields.failedCount}회</span>
+            </div>
+          </div>
+        </section>
+      )}
+
       <div className="lot-detail-hero">
         <div className="lot-detail-hero-media">
           <div className="lot-detail-media-stage">
@@ -1734,6 +1817,8 @@ function normalizeResultItems(payload, assetType = "realty") {
       ends: formatOnbidDate(item.cltrOpbdDt ?? item.opbdDt ?? item.opbdDtm ?? item.cltrBidEndDt),
       status,
       statusCode: item.pbctStatCd || "",
+      soldAmount,
+      lowestBid: minimum,
       risk: status.includes("유찰") ? "재입찰 검토" : status.includes("낙찰") ? "결과 확인" : "검토",
       tags: [
         item.prptDivNm,
@@ -3377,6 +3462,7 @@ function App() {
               onToggleSaved={() => toggleSaved(selected.id)}
               onBidCheck={openBidCheck}
               layout="page"
+              resultFocus={isResultFocus(statusFocus)}
             />
           </section>
         ) : (
@@ -3568,6 +3654,7 @@ function App() {
                 onToggleSaved={() => toggleSaved(selected.id)}
                 onBidCheck={openBidCheck}
                 layout="aside"
+                resultFocus={isResultFocus(statusFocus)}
               />
             </aside>
           )}

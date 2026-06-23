@@ -2427,6 +2427,79 @@ a {
   color: #fff;
 }
 
+.lot-detail-result-card {
+  border: 1px solid #e8dcc0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fffdf6 0%, #fff 100%);
+  padding: 10px 12px;
+}
+
+.lot-detail-result-card h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #9a6d00;
+}
+
+.lot-detail-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+
+.lot-detail-result-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.lot-detail-result-item strong {
+  color: #6a7884;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.lot-detail-result-item strong::after {
+  content: ":";
+  margin-left: 1px;
+  color: #8a97a3;
+}
+
+.lot-detail-result-item span {
+  color: #17324a;
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.lot-detail-result-item.highlight span {
+  color: #b45309;
+  font-weight: 800;
+}
+
+.lot-detail-result-status {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.lot-detail-result-status.sold {
+  background: #fff4d6;
+  color: #9a6d00;
+}
+
+.lot-detail-result-status.failed {
+  background: #ffe8ea;
+  color: #d9485f;
+}
+
 .lot-detail-spec-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2948,6 +3021,10 @@ a {
   }
 
   .lot-detail-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lot-detail-result-grid {
     grid-template-columns: 1fr;
   }
 }
