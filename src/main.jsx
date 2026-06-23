@@ -1698,16 +1698,14 @@ function LotDetailPanel({
 
               <div className="lot-detail-section">
                 <h4>인도/인수 책임 및 부대조건</h4>
-                <table className="lot-detail-kv-table lot-detail-kv-inline lot-detail-usage-table">
-                  <tbody>
-                    {deliveryRows.map((row) => (
-                      <tr key={row.label}>
-                        <th>{row.label}</th>
-                        <td>{row.value}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="lot-detail-delivery-list">
+                  {deliveryRows.map((row) => (
+                    <div key={row.label} className="lot-detail-delivery-row">
+                      <span className="lot-detail-delivery-label">{row.label}</span>
+                      <span className="lot-detail-delivery-value">{row.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {pageMetaLoading && <p className="muted">온비드 상세 정보를 불러오는 중입니다.</p>}
