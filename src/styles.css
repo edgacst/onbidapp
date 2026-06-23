@@ -2675,6 +2675,9 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 0;
+  position: sticky;
+  top: 0;
+  z-index: 6;
   border-bottom: 1px solid #edf1f4;
   background: #fafbfc;
 }
@@ -2689,6 +2692,28 @@ a {
   font-size: 14px;
   font-weight: 800;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lot-detail-tab-section {
+  scroll-margin-top: 56px;
+  padding-top: 4px;
+}
+
+.lot-detail-tab-section + .lot-detail-tab-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #edf1f4;
+}
+
+.lot-detail-tab-section h3 {
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #5a56e8;
+  font-size: 18px;
 }
 
 .lot-detail-tabs button.active {
@@ -2699,6 +2724,10 @@ a {
 
 .lot-detail-tab-panel {
   padding: 18px;
+}
+
+.lot-detail-tab-panel > .lot-detail-tab-section:first-child h3 {
+  margin-top: 0;
 }
 
 .lot-detail-tab-panel h3 {

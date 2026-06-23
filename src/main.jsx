@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AlertCircle,
@@ -1078,12 +1078,59 @@ function LotDetailPanel({
   const [activeTab, setActiveTab] = useState("spec");
   const [photoIndex, setPhotoIndex] = useState(0);
   const [photoFallbacks, setPhotoFallbacks] = useState({});
+  const sectionRefs = useRef({});
+  const scrollingToTab = useRef(false);
+
+  const detailTabs = [
+    { id: "spec", label: "세부정보" },
+    { id: "seized", label: "압류재산정보" },
+    { id: "bid", label: "입찰정보" },
+    { id: "market", label: "인근 시세 및 낙찰 사례" },
+  ];
 
   useEffect(() => {
     setPhotoIndex(0);
     setPhotoFallbacks({});
     setMediaMode("photo");
   }, [photos, lot?.id]);
+
+  useEffect(() => {
+    setActiveTab("spec");
+    sectionRefs.current = {};
+  }, [lot?.id]);
+
+  function goToDetailTab(tabId) {
+    setActiveTab(tabId);
+    scrollingToTab.current = true;
+    requestAnimationFrame(() => {
+      sectionRefs.current[tabId]?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.setTimeout(() => {
+        scrollingToTab.current = false;
+      }, 700);
+    });
+  }
+
+  useEffect(() => {
+    const sections = detailTabs
+      .map((tab) => sectionRefs.current[tab.id])
+      .filter(Boolean);
+    if (!sections.length) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (scrollingToTab.current) return;
+        const hit = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        const tabId = hit?.target?.getAttribute("data-tab-id");
+        if (tabId) setActiveTab(tabId);
+      },
+      { root: null, rootMargin: "-56px 0px -55% 0px", threshold: [0, 0.15, 0.4, 0.7] },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [lot?.id, pageMetaLoading, detailLoading]);
 
   const displayPhotos = dedupePhotos(photos);
   const photoCount = displayPhotos.length;
@@ -1112,13 +1159,6 @@ function LotDetailPanel({
   const statusLabel = statusGroup(lot) === "ready" ? "입찰시작 전" : lot.status;
   const deptLine = [raw.chrgDeptNm || raw.dpslDeptNm, raw.chrgTelno || raw.telNo].filter(Boolean).join(" / ");
   const onbidUrl = onbidDetailUrl(lot);
-
-  const detailTabs = [
-    { id: "spec", label: "세부정보" },
-    { id: "seized", label: "압류재산정보" },
-    { id: "bid", label: "입찰정보" },
-    { id: "market", label: "인근 시세 및 낙찰 사례" },
-  ];
 
   return (
     <article className={`lot-detail-panel lot-detail-panel--${layout}`}>
@@ -1301,8 +1341,9 @@ function LotDetailPanel({
               type="button"
               role="tab"
               aria-selected={activeTab === tab.id}
+              aria-controls={`lot-detail-section-${tab.id}`}
               className={activeTab === tab.id ? "active" : ""}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => goToDetailTab(tab.id)}
             >
               {tab.label}
             </button>
@@ -1310,9 +1351,14 @@ function LotDetailPanel({
         </div>
 
         <div className="lot-detail-tab-panel" role="tabpanel">
-          {activeTab === "spec" && (
-            <>
-              <h3><CheckCircle2 size={18} /> 세부정보</h3>
+          <section
+            id="lot-detail-section-spec"
+            data-tab-id="spec"
+            className="lot-detail-tab-section"
+            ref={(node) => { sectionRefs.current.spec = node; }}
+            aria-labelledby="lot-detail-tab-spec"
+          >
+            <h3 id="lot-detail-tab-spec"><CheckCircle2 size={18} /> 세부정보</h3>
               <div className="lot-detail-section">
                 <h4>면적정보</h4>
                 <table className="lot-detail-table">
@@ -1423,12 +1469,16 @@ function LotDetailPanel({
               {pageMetaLoading && <p className="muted">온비드 상세 정보를 불러오는 중입니다.</p>}
               {detailLoading && <p className="muted">상세 API 조회 중입니다.</p>}
               {detailError && <p className="muted">상세 API 권한이 없어 온비드 원문 기준으로 표시 중입니다.</p>}
-            </>
-          )}
+          </section>
 
-          {activeTab === "seized" && (
-            <>
-              <h3><CheckCircle2 size={18} /> 압류재산정보</h3>
+          <section
+            id="lot-detail-section-seized"
+            data-tab-id="seized"
+            className="lot-detail-tab-section"
+            ref={(node) => { sectionRefs.current.seized = node; }}
+            aria-labelledby="lot-detail-tab-seized"
+          >
+            <h3 id="lot-detail-tab-seized"><CheckCircle2 size={18} /> 압류재산정보</h3>
               <div className="lot-detail-field-grid">
                 <div className="lot-detail-field">
                   <strong>재산구분</strong>
@@ -1447,12 +1497,16 @@ function LotDetailPanel({
                   <span>{lot.note || "-"}</span>
                 </div>
               </div>
-            </>
-          )}
+          </section>
 
-          {activeTab === "bid" && (
-            <>
-              <h3><CheckCircle2 size={18} /> 입찰정보</h3>
+          <section
+            id="lot-detail-section-bid"
+            data-tab-id="bid"
+            className="lot-detail-tab-section"
+            ref={(node) => { sectionRefs.current.bid = node; }}
+            aria-labelledby="lot-detail-tab-bid"
+          >
+            <h3 id="lot-detail-tab-bid"><CheckCircle2 size={18} /> 입찰정보</h3>
               <div className="lot-detail-field-grid">
                 <div className="lot-detail-field">
                   <strong>입찰방식</strong>
@@ -1493,16 +1547,19 @@ function LotDetailPanel({
                   <span>{lot.failedCount ?? 0}회</span>
                 </div>
               </div>
-            </>
-          )}
+          </section>
 
-          {activeTab === "market" && (
-            <>
-              <h3><CheckCircle2 size={18} /> 인근 시세 및 낙찰 사례</h3>
-              <p className="muted">인근 시세와 낙찰 사례는 온비드 원문에서 확인할 수 있습니다.</p>
-              <a className="secondary-action" href={onbidUrl} target="_blank" rel="noreferrer">온비드에서 보기 <ExternalLink size={16} /></a>
-            </>
-          )}
+          <section
+            id="lot-detail-section-market"
+            data-tab-id="market"
+            className="lot-detail-tab-section"
+            ref={(node) => { sectionRefs.current.market = node; }}
+            aria-labelledby="lot-detail-tab-market"
+          >
+            <h3 id="lot-detail-tab-market"><CheckCircle2 size={18} /> 인근 시세 및 낙찰 사례</h3>
+            <p className="muted">인근 시세와 낙찰 사례는 온비드 원문에서 확인할 수 있습니다.</p>
+            <a className="secondary-action" href={onbidUrl} target="_blank" rel="noreferrer">온비드에서 보기 <ExternalLink size={16} /></a>
+          </section>
         </div>
       </section>
 
