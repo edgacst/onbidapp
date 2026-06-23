@@ -4,6 +4,10 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:phone": "node scripts/dev-phone.mjs",
+    "phone": "node scripts/phone-connect.mjs",
+    "phone:setup": "node scripts/phone-setup.mjs",
+    "phone:dev": "node scripts/dev-phone.mjs",
+    "phone:prod": "node scripts/phone-launch.mjs --port 3000 --server prod --keep-alive",
     "build": "node scripts/build.mjs",
     "build:phone": "node scripts/build-phone.mjs",
     "build:inner": "vite build",

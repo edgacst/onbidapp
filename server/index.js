@@ -100,8 +100,7 @@ app.listen(port, "0.0.0.0", () => {
   for (const address of lanAddresses()) {
     console.log(`   폰(Wi-Fi): http://${address}:${port}`);
   }
-  console.log(`   폰(USB):  adb reverse tcp:${port} tcp:${port} → http://127.0.0.1:${port}`);
-  console.log("   폰 디버깅: npm run dev:phone");
+  console.log(`   폰(USB):  npm run phone  → http://127.0.0.1:${port}`);
   if (!existsSync(distPath)) {
     console.log("   (프론트 빌드 없음 — API 프록시만 동작)");
   }

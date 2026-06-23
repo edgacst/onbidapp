@@ -1,8 +1,15 @@
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  adbPath,
+  getAdbDevices,
+  isPortOpen,
+  openOnAndroidChrome,
+  setupAdbReverse,
+} from "./phone-adb.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -42,23 +49,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function isPortOpen(targetPort) {
-  try {
-    const response = await fetch(`http://127.0.0.1:${targetPort}/`, { signal: AbortSignal.timeout(2000) });
-    return response.ok || response.status < 500;
-  } catch {
-    return false;
-  }
-}
-
-async function waitForPort(targetPort, attempts = 40) {
-  for (let i = 0; i < attempts; i += 1) {
-    if (await isPortOpen(targetPort)) return true;
-    await sleep(500);
-  }
-  return false;
-}
-
 function openBrowser(url) {
   if (process.platform === "win32") {
     spawn("cmd.exe", ["/c", "start", "", url], { detached: true, stdio: "ignore" }).unref();
@@ -68,69 +58,12 @@ function openBrowser(url) {
   spawn(opener, [url], { detached: true, stdio: "ignore" }).unref();
 }
 
-function resolveAdbPath() {
-  if (process.env.ADB_PATH && existsSync(process.env.ADB_PATH)) return process.env.ADB_PATH;
-
-  const candidates = [
-    process.env.ANDROID_HOME ? join(process.env.ANDROID_HOME, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "",
-    process.env.ANDROID_SDK_ROOT ? join(process.env.ANDROID_SDK_ROOT, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "",
-    join(process.env.LOCALAPPDATA || "", "Android", "Sdk", "platform-tools", "adb.exe"),
-    join(process.env.USERPROFILE || "", "AppData", "Local", "Android", "Sdk", "platform-tools", "adb.exe"),
-  ].filter(Boolean);
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
+async function waitForPort(targetPort, attempts = 40) {
+  for (let i = 0; i < attempts; i += 1) {
+    if (await isPortOpen(targetPort)) return true;
+    await sleep(500);
   }
-  return "adb";
-}
-
-const adbPath = resolveAdbPath();
-
-function runAdb(args) {
-  try {
-    return execFileSync(adbPath, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-  } catch (error) {
-    const detail = error?.stderr?.toString?.() || error?.message || "";
-    if (detail) console.warn(`adb 실패 (${adbPath}): ${detail.trim()}`);
-    return "";
-  }
-}
-
-function getAdbDevices() {
-  const output = runAdb(["devices"]);
-  if (!output) return [];
-  return output
-    .split("\n")
-    .slice(1)
-    .map((line) => line.trim())
-    .filter((line) => line && line.endsWith("device"))
-    .map((line) => line.split("\t")[0]);
-}
-
-function setupAdbReverse(port, deviceId = "") {
-  const prefix = deviceId ? ["-s", deviceId] : [];
-  runAdb([...prefix, "reverse", `tcp:${port}`, `tcp:${port}`]);
-}
-
-function openOnAndroidDevice(url, deviceId = "") {
-  const prefix = deviceId ? ["-s", deviceId] : [];
-  const chromePackages = ["com.android.chrome", "com.chrome.beta", "com.chrome.dev"];
-  for (const pkg of chromePackages) {
-    const result = runAdb([
-      ...prefix,
-      "shell",
-      "am",
-      "start",
-      "-a",
-      "android.intent.action.VIEW",
-      "-d",
-      url,
-      pkg,
-    ]);
-    if (result && !/Error|Exception/i.test(result)) return pkg;
-  }
-  runAdb([...prefix, "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", url]);
-  return "";
+  return false;
 }
 
 async function ensureServer(options) {
@@ -200,10 +133,10 @@ export async function launchPhone(argv = process.argv.slice(2)) {
     console.log(`폰 URL: ${deviceUrl}`);
     console.log("PC 디버깅: Chrome → chrome://inspect → Remote devices");
     if (options.openDevice) {
-      const openedBrowser = openOnAndroidDevice(deviceUrl, adbDeviceId);
+      const openedBrowser = openOnAndroidChrome(deviceUrl, adbDeviceId);
       console.log(openedBrowser
         ? `연결된 폰 Chrome(${openedBrowser})에서 앱을 열었습니다.`
-        : "폰 브라우저 열기를 시도했습니다. 안 뜨면 폰에서 Chrome으로 직접 접속하세요.");
+        : "폰 브라우저 열기를 시도했습니다.");
     }
   }
 
@@ -211,7 +144,7 @@ export async function launchPhone(argv = process.argv.slice(2)) {
   console.log(`PC:   ${localUrl}`);
   for (const url of lanUrls) console.log(`폰:   ${url}`);
   if (adbDevices.length === 0) {
-    console.log("USB 디버깅: 폰 USB 연결 후 npm run dev:phone 을 사용하세요.");
+    console.log("USB 연결: npm run phone");
   }
 
   if (options.useTunnel) {
@@ -231,7 +164,6 @@ export async function launchPhone(argv = process.argv.slice(2)) {
   }
 
   if (options.openBrowser) openBrowser(localUrl);
-
   if (options.keepAlive) await new Promise(() => {});
 }
 

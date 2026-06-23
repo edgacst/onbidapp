@@ -2,11 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Chrome: 공매레이더",
+      "name": "PC Chrome: 개발",
       "type": "chrome",
       "request": "launch",
       "url": "http://localhost:5173",
       "webRoot": "${workspaceFolder}/src"
+    },
+    {
+      "name": "폰 Chrome: USB 디버깅",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "webRoot": "${workspaceFolder}/src",
+      "sourceMaps": true,
+      "preLaunchTask": "폰 USB 연결"
     }
   ]
 }

@@ -1,0 +1,77 @@
+import {
+  adbPath,
+  getAdbDevices,
+  isPortOpen,
+  openOnAndroidChrome,
+  setupAdbReverse,
+  setupChromeDevtoolsForward,
+} from "./phone-adb.mjs";
+
+function parseArgs(argv) {
+  const options = {
+    openDevice: true,
+    ports: [],
+  };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--no-open") options.openDevice = false;
+    else if (arg === "--port") options.ports.push(Number(argv[++i]));
+  }
+  return options;
+}
+
+async function pickActivePort(ports) {
+  for (const port of ports) {
+    if (await isPortOpen(port)) return port;
+  }
+  return ports[0];
+}
+
+async function main() {
+  const options = parseArgs(process.argv.slice(2));
+  const devices = getAdbDevices();
+  if (devices.length === 0) {
+    console.error("USB로 연결된 Android 기기가 없습니다.");
+    console.error("1) 폰 USB 디버깅 켜기");
+    console.error("2) USB 케이블 연결");
+    console.error("3) npm run phone:setup  (최초 1회)");
+    process.exit(1);
+  }
+
+  const deviceId = devices[0];
+  const ports = options.ports.length
+    ? options.ports
+    : [Number(process.env.PHONE_DEV_PORT || 5173), Number(process.env.PHONE_PROD_PORT || 3000)];
+
+  for (const port of ports) {
+    setupAdbReverse(port, deviceId);
+  }
+  setupChromeDevtoolsForward(deviceId);
+
+  const activePort = await pickActivePort(ports);
+  const deviceUrl = `http://127.0.0.1:${activePort}/`;
+  const serverRunning = await isPortOpen(activePort);
+
+  console.log("\n=== 폰 USB 연결 ===");
+  console.log(`adb:     ${adbPath}`);
+  console.log(`기기:    ${deviceId}`);
+  console.log(`reverse: ${ports.map((port) => `tcp:${port}`).join(", ")}`);
+  console.log(`폰 URL:  ${deviceUrl}${serverRunning ? "" : "  ← 서버 미실행"}`);
+  console.log("PC 디버깅: Chrome → chrome://inspect → Remote devices");
+
+  if (options.openDevice) {
+    const pkg = openOnAndroidChrome(deviceUrl, deviceId);
+    console.log(pkg ? `폰 Chrome(${pkg}) 실행` : "폰 브라우저 실행 시도");
+  }
+
+  if (!serverRunning) {
+    console.log("\n서버 먼저 실행:");
+    console.log("  개발: npm run dev");
+    console.log("  운영: npm run build && npm start");
+  }
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

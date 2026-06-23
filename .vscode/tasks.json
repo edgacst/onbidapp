@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "폰 USB 연결",
+      "type": "npm",
+      "script": "phone",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "폰 환경 설정 (최초 1회)",
+      "type": "npm",
+      "script": "phone:setup",
+      "problemMatcher": []
+    },
+    {
+      "label": "개발서버 + 폰",
+      "type": "npm",
+      "script": "phone:dev",
+      "problemMatcher": [],
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "개발 서버",
+      "type": "npm",
+      "script": "dev",
+      "problemMatcher": [],
+      "isBackground": true
+    }
+  ]
+}
