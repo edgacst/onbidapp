@@ -755,7 +755,8 @@ function buildSeizedMainPoints(pageMeta) {
   return DEFAULT_SEIZED_MAIN_POINTS;
 }
 
-function buildSeizedCautionItems(pageMeta, areaRows, usageRows) {
+function buildSeizedCautionItems(pageMeta, areaRows, usageRows, detailItem = null) {
+  const fromApi = splitDetailCont(detailItem?.pytnMtrsCont);
   const fromHtml = pageMeta?.seizedCautionItems || [];
   const items = [];
   const seen = new Set();
@@ -767,8 +768,9 @@ function buildSeizedCautionItems(pageMeta, areaRows, usageRows) {
     items.push({ text: cleaned, highlight });
   };
 
-  if (fromHtml.length) {
-    fromHtml.forEach((text, index) => pushItem(text, index === 0 || /인도|명도/.test(text)));
+  const source = fromApi.length ? fromApi : fromHtml;
+  if (source.length) {
+    source.forEach((text, index) => pushItem(text, index === 0 || /인도|명도/.test(text)));
   } else {
     pushItem(DEFAULT_DELIVERY_CAUTION, true);
   }
@@ -974,7 +976,34 @@ function mergePageMeta(apiMeta, htmlMeta) {
   };
 }
 
-function buildUsageRows(pageMeta, lot) {
+function buildDeliveryRows(pageMeta, lot, detailItem = null) {
+  const item = detailItem || {};
+  const rows = [];
+  const cautionLines = splitDetailCont(item.pytnMtrsCont);
+  const deliveryLine = cautionLines.find((text) => /인도|명도/.test(text));
+  if (deliveryLine) {
+    rows.push({ label: "인도/인수 책임", value: deliveryLine });
+  } else if (pageMeta?.deliveryRows?.length && !isThinDeliveryMeta(pageMeta.deliveryRows)) {
+    return pageMeta.deliveryRows;
+  } else {
+    const responsibility = cleanOnbidText(item.evcRsbyTrgtCont)
+      || lot?.raw?.evcRsbyTrgtCont
+      || lot?.note?.replace(/^인도인수책임:\s*/, "")
+      || "";
+    if (responsibility) {
+      rows.push({ label: "인도/인수 책임", value: responsibility });
+    }
+  }
+  if (item.pbctTdps) rows.push({ label: "공매세부", value: cleanOnbidText(item.pbctTdps) });
+  if (item.pbctEspc) rows.push({ label: "공매특이사항", value: cleanOnbidText(item.pbctEspc) });
+  if (rows.length) return rows;
+  if (pageMeta?.deliveryRows?.length) return pageMeta.deliveryRows;
+  return [{ label: "인도/인수 책임", value: "-" }];
+}
+
+function buildUsageRows(pageMeta, lot, detailItem = null) {
+  const apiRows = buildPageMetaFromDetailItem(detailItem)?.usageRows;
+  if (apiRows?.length) return apiRows;
   if (pageMeta?.usageRows?.length) return pageMeta.usageRows;
   return [
     { label: "위치 및 주위환경", value: "-" },
@@ -1016,11 +1045,15 @@ function buildAppraisalRows(pageMeta, lot, detail) {
   return [];
 }
 
-function buildDeliveryRows(pageMeta, lot) {
-  if (pageMeta?.deliveryRows?.length) return pageMeta.deliveryRows;
-  const responsibility = lot?.raw?.evcRsbyTrgtCont || lot?.note?.replace(/^인도인수책임:\s*/, "") || "";
-  if (!responsibility) return [{ label: "인도/인수 책임", value: "-" }];
-  return [{ label: "인도/인수 책임", value: responsibility }];
+function formatDeliveryNote(lot, detailItem = null) {
+  const cautionLines = splitDetailCont(detailItem?.pytnMtrsCont);
+  const fromCaution = cautionLines.find((text) => /인도|명도/.test(text));
+  if (fromCaution) return fromCaution;
+  const fromNote = lot?.note?.replace(/^인도인수책임:\s*/, "");
+  if (fromNote && fromNote.length > 12) return fromNote;
+  const fromRaw = cleanOnbidText(detailItem?.evcRsbyTrgtCont || lot?.raw?.evcRsbyTrgtCont);
+  if (fromRaw && fromRaw.length > 12) return fromRaw;
+  return fromRaw || fromNote || "-";
 }
 
 function parseOnbidDetailHtml(html) {
@@ -1070,7 +1103,7 @@ const onbidPageMetaCache = new Map();
 
 async function fetchOnbidPageMeta(lot, detail = null) {
   if (!lot?.id) return null;
-  const cacheKey = `meta-v3:${lot.id}:${lot.conditionNo || ""}:${detail?.item?.onbidPbancNo || lot.noticeNo || ""}`;
+  const cacheKey = `meta-v4:${lot.id}:${lot.conditionNo || ""}:${detail?.item?.onbidPbancNo || lot.noticeNo || ""}:${detail?.item?.cltrMngNo || ""}`;
   if (onbidPageMetaCache.has(cacheKey)) return onbidPageMetaCache.get(cacheKey);
 
   const apiMeta = buildPageMetaFromDetailItem(detail?.item);
@@ -1637,14 +1670,15 @@ function LotDetailPanel({
   const capabilityTags = lotCapabilityTags(lot, pageMeta);
   const restrictionTags = bidRestrictionTags(lot, pageMeta);
   const appraisalUrl = buildAppraisalUrlFromLot(lot, pageMeta, detail);
-  const usageRows = buildUsageRows(pageMeta, lot);
+  const usageRows = buildUsageRows(pageMeta, lot, detailItem);
   const appraisalRows = buildAppraisalRows(pageMeta, lot, detail).map((row) => ({
     ...row,
     reportUrl: row.reportUrl || appraisalUrl,
   }));
-  const deliveryRows = buildDeliveryRows(pageMeta, lot);
+  const deliveryRows = buildDeliveryRows(pageMeta, lot, detailItem);
   const seizedMainPoints = buildSeizedMainPoints(pageMeta);
-  const seizedCautionItems = buildSeizedCautionItems(pageMeta, areaRows, usageRows);
+  const seizedCautionItems = buildSeizedCautionItems(pageMeta, areaRows, usageRows, detailItem);
+  const deliveryNote = formatDeliveryNote(lot, detailItem);
   const roadAddress = lot.roadAddress || detailItem.rdnmAdrs || raw.rdnmAdrs || raw.roadNmRadr || "-";
   const lotAddress = pickFullLotAddress(lot, detailItem);
   const isSeized = /압류/.test(propertyTag);
@@ -2021,7 +2055,7 @@ function LotDetailPanel({
                   {deliveryRows.map((row) => (
                     <div key={row.label} className="lot-detail-delivery-row">
                       <span className="lot-detail-delivery-label">{row.label}</span>
-                      <span className="lot-detail-delivery-value">{row.value}</span>
+                      <span className={`lot-detail-delivery-value ${/인도|명도/.test(row.value) ? "lot-detail-seized-blink" : ""}`}>{row.value}</span>
                     </div>
                   ))}
                 </div>
@@ -2082,7 +2116,7 @@ function LotDetailPanel({
                 </div>
                 <div className="lot-detail-field">
                   <strong>인도인수</strong>
-                  <span>{lot.note || "-"}</span>
+                  <span className={/인도|명도/.test(deliveryNote) ? "lot-detail-seized-blink" : ""}>{deliveryNote}</span>
                 </div>
               </div>
           </section>
@@ -3163,7 +3197,7 @@ function App() {
     let cancelled = false;
     setDetailLoading(true);
     setDetailError("");
-    fetchOnbidDetail(activeFilters, selected)
+    fetchOnbidDetail(activeFilters, selectedLot?.id ? selectedLot : selected)
       .then((nextDetail) => {
         if (!cancelled) setDetail(nextDetail);
       })
@@ -3180,7 +3214,29 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [selected?.id, selected?.conditionNo, selected?.assetType, data.sample]);
+  }, [selectedLot?.id, selected?.id, selectedLot?.conditionNo, selectedLot?.onbidNo, selectedLot?.pbctNo, selectedLot?.noticeNo, selected?.assetType, data.sample]);
+
+  useEffect(() => {
+    if (!detail?.item?.cltrMngNo || data.sample) return undefined;
+
+    const enriched = mergeLotWithDetail(
+      data.lots.find((lot) => lot.id === detail.item.cltrMngNo)
+        || (selectedId === detail.item.cltrMngNo ? selected : null),
+      detail,
+    );
+    if (!enriched?.id) return undefined;
+
+    setData((prev) => {
+      if (prev.sample) return prev;
+      const hasLot = prev.lots.some((lot) => lot.id === enriched.id);
+      const lots = hasLot
+        ? prev.lots.map((lot) => (lot.id === enriched.id ? enriched : lot))
+        : [enriched, ...prev.lots];
+      return { ...prev, lots };
+    });
+
+    return undefined;
+  }, [detail?.item?.cltrMngNo, data.sample, selectedId]);
 
   useEffect(() => {
     if (!selected || data.sample) {
