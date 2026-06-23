@@ -2013,7 +2013,7 @@ function LotDetailPanel({
           <DetailTabSection id="spec" title="세부정보" sectionRefs={sectionRefs}>
               <div className="lot-detail-section">
                 <h4>면적정보</h4>
-                <table className="lot-detail-table">
+                <table className="lot-detail-table lot-detail-mobile-table">
                   <thead>
                     <tr>
                       <th>용도</th>
@@ -2025,10 +2025,10 @@ function LotDetailPanel({
                   <tbody>
                     {areaRows.length > 0 ? areaRows.map((row) => (
                       <tr key={`${row.usage}-${row.area}`}>
-                        <td>{row.usage}</td>
-                        <td>{formatAreaMetric(row.area, usePyeong)}</td>
-                        <td>{row.share}</td>
-                        <td>{row.note}</td>
+                        <td data-label="용도">{row.usage}</td>
+                        <td data-label="면적">{formatAreaMetric(row.area, usePyeong)}</td>
+                        <td data-label="지분">{row.share}</td>
+                        <td data-label="비고">{row.note}</td>
                       </tr>
                     )) : (
                       <tr>
@@ -2188,13 +2188,13 @@ function LotDetailPanel({
                       <tbody>
                         {leaseRows.length > 0 ? leaseRows.map((row, index) => (
                           <tr key={`${row.category}-${row.name}-${index}`}>
-                            <td>{row.category}</td>
-                            <td>{row.name}</td>
-                            <td>{row.deposit}</td>
-                            <td>{row.rent}</td>
-                            <td>{row.convertedDeposit}</td>
-                            <td>{row.confirmDate}</td>
-                            <td>{row.moveInDate}</td>
+                            <td data-label="구분">{row.category}</td>
+                            <td data-label="성명">{row.name}</td>
+                            <td data-label="보증금">{row.deposit}</td>
+                            <td data-label="차임">{row.rent}</td>
+                            <td data-label="환산보증금">{row.convertedDeposit}</td>
+                            <td data-label="확정일">{row.confirmDate}</td>
+                            <td data-label="전입일">{row.moveInDate}</td>
                           </tr>
                         )) : (
                           <tr><td colSpan={7}>조회된 결과가 없습니다.</td></tr>
@@ -2218,10 +2218,10 @@ function LotDetailPanel({
                       <tbody>
                         {registryRows.length > 0 ? registryRows.map((row, index) => (
                           <tr key={`${row.kind}-${row.holder}-${index}`}>
-                            <td>{row.kind}</td>
-                            <td>{row.holder}</td>
-                            <td>{row.date}</td>
-                            <td>{row.amount}</td>
+                            <td data-label="권리종류">{row.kind}</td>
+                            <td data-label="권리자명">{row.holder}</td>
+                            <td data-label="설정일자">{row.date}</td>
+                            <td data-label="설정금액">{row.amount}</td>
                           </tr>
                         )) : (
                           <tr><td colSpan={4}>조회된 결과가 없습니다.</td></tr>
@@ -3905,7 +3905,7 @@ function App() {
         </nav>
       </aside>
 
-      <section className="workspace">
+      <section className={`workspace${view === "detail" ? " workspace--detail" : ""}`}>
         <header className="topbar">
           <div>
             <h1>
