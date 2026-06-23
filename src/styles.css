@@ -3340,9 +3340,93 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lot-detail-delivery-value {
+  .lot-detail-delivery-value,
+  .lot-detail-seized-blink {
     animation: none;
   }
+}
+
+.lot-detail-seized-card {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f3f5f7;
+  border: 1px solid #e8edf1;
+}
+
+.lot-detail-seized-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #1f2d3d;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.lot-detail-seized-card-head svg {
+  color: #2f6fd6;
+  flex-shrink: 0;
+}
+
+.lot-detail-seized-main-list,
+.lot-detail-seized-caution-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lot-detail-seized-main-list li {
+  position: relative;
+  padding-left: 14px;
+  margin-bottom: 8px;
+  color: #1f2d3d;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.lot-detail-seized-main-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #2f6fd6;
+}
+
+.lot-detail-seized-caution-list {
+  margin-top: 2px;
+  padding-left: 14px;
+}
+
+.lot-detail-seized-caution-list li {
+  position: relative;
+  padding-left: 12px;
+  margin-bottom: 6px;
+  color: #334351;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.lot-detail-seized-caution-list li::before {
+  content: "-";
+  position: absolute;
+  left: 0;
+  color: #6a7884;
+}
+
+.lot-detail-seized-blink {
+  display: block;
+  white-space: nowrap;
+  overflow-x: auto;
+  color: #d9485f;
+  font-weight: 800;
+  animation: delivery-value-blink 1.1s ease-in-out infinite;
+  -webkit-overflow-scrolling: touch;
+}
+
+.lot-detail-field-grid-compact {
+  margin-top: 4px;
 }
 
 .lot-detail-appraisal-table {

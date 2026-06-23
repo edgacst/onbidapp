@@ -654,6 +654,103 @@ function mergeBadgeLists(...lists) {
   return out;
 }
 
+function cleanOnbidText(value) {
+  return String(value || "")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractOnbidAreaNoteItems(html) {
+  const tbodyMatch = html.match(/<caption>면적정보 테이블<\/caption>[\s\S]*?<tbody>([\s\S]*?)<\/tbody>/);
+  if (!tbodyMatch) return [];
+
+  const notes = [];
+  for (const trMatch of tbodyMatch[1].matchAll(/<tr[\s\S]*?<\/tr>/g)) {
+    const cells = [...trMatch[0].matchAll(/<span class="txt01">\s*([\s\S]*?)\s*<\/span>/g)]
+      .map((match) => cleanOnbidText(match[1]));
+    if (cells.length >= 4 && cells[3] && cells[3] !== "-") notes.push(cells[3]);
+  }
+  return notes;
+}
+
+function extractOnbidSeizedBrief(html) {
+  const idx = html.indexOf('id="szrPrptBidPrmrMtrs"');
+  if (idx < 0) return { mainPoints: [], cautionItems: [] };
+
+  const slice = html.slice(idx, idx + 6000);
+  const listMatch = slice.match(/<ul class="dot_list03">([\s\S]*?)<\/ul>/);
+  if (!listMatch) return { mainPoints: [], cautionItems: [] };
+
+  const mainPoints = [];
+  const cautionItems = [];
+  for (const liMatch of listMatch[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)) {
+    const inner = liMatch[1];
+    const plain = cleanOnbidText(inner.replace(/<ul[\s\S]*$/, ""));
+    const nested = inner.match(/<ul class="dash_list03">([\s\S]*?)<\/ul>/);
+    if (plain.includes("유의사항")) {
+      mainPoints.push("유의사항");
+      if (nested) {
+        for (const subMatch of nested[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)) {
+          const text = cleanOnbidText(subMatch[1]);
+          if (text) cautionItems.push(text);
+        }
+      }
+    } else if (plain) {
+      mainPoints.push(plain);
+    }
+  }
+  return { mainPoints, cautionItems };
+}
+
+const DEFAULT_SEIZED_MAIN_POINTS = [
+  "공매재산에 대하여 등기된 권리 또는 가처분으로서 매각으로 효력을 잃지 아니하는 것",
+  "공매재산의 매수인으로서 일정한 자격을 필요로 하는 경우 그 사실",
+  "유의사항",
+];
+
+const DEFAULT_DELIVERY_CAUTION = "공매재산의 인도 및 명도 책임은 매수인 부담으로, 공부열람 및 물건답사 등을 통해 상태점검, 관리비 미납 여부, 임차인의 대항력 등 기타 권리 관계에 대하여 반드시 입찰자 책임 하에 사전 조사 후 입찰 바람.";
+
+function buildSeizedMainPoints(pageMeta) {
+  if (pageMeta?.seizedMainPoints?.length) return pageMeta.seizedMainPoints;
+  return DEFAULT_SEIZED_MAIN_POINTS;
+}
+
+function buildSeizedCautionItems(pageMeta, areaRows, usageRows) {
+  const fromHtml = pageMeta?.seizedCautionItems || [];
+  const items = [];
+  const seen = new Set();
+
+  const pushItem = (text, highlight = false) => {
+    const cleaned = String(text || "").replace(/\s+/g, " ").trim();
+    if (!cleaned || cleaned === "-" || seen.has(cleaned)) return;
+    seen.add(cleaned);
+    items.push({ text: cleaned, highlight });
+  };
+
+  if (fromHtml.length) {
+    fromHtml.forEach((text, index) => pushItem(text, index === 0 || /인도|명도/.test(text)));
+  } else {
+    pushItem(DEFAULT_DELIVERY_CAUTION, true);
+  }
+
+  const areaNotes = pageMeta?.areaNoteItems || [];
+  areaNotes.forEach((text) => pushItem(text));
+  areaRows.forEach((row) => {
+    if (row.note && row.note !== "-") {
+      const prefix = row.usage && row.usage !== "-" ? `${row.usage}: ` : "";
+      pushItem(`${prefix}${row.note}`);
+    }
+  });
+
+  const etc = usageRows.find((row) => /기타/.test(row.label))?.value;
+  if (etc && etc !== "-") pushItem(etc);
+
+  return items;
+}
+
 function extractOnbidHtmlValue(html, label) {
   const re = new RegExp(`${label}<\\/span>[\\s\\S]{0,180}?txt01[^>]*>([^<]+)<`, "i");
   return html.match(re)?.[1]?.trim() || "";
@@ -797,6 +894,8 @@ function parseOnbidDetailHtml(html) {
   const usageRows = extractOnbidCaseRows(html, "이용 현황");
   const appraisalRows = extractOnbidAppraisalRows(html);
   const deliveryRows = extractOnbidCaseRows(html, "인도/인수 책임 및 부대조건");
+  const seizedBrief = extractOnbidSeizedBrief(html);
+  const areaNoteItems = extractOnbidAreaNoteItems(html);
 
   return {
     noticeDate,
@@ -807,6 +906,9 @@ function parseOnbidDetailHtml(html) {
     usageRows,
     appraisalRows,
     deliveryRows,
+    seizedMainPoints: seizedBrief.mainPoints,
+    seizedCautionItems: seizedBrief.cautionItems,
+    areaNoteItems,
   };
 }
 
@@ -1345,6 +1447,8 @@ function LotDetailPanel({
     reportUrl: row.reportUrl || appraisalUrl,
   }));
   const deliveryRows = buildDeliveryRows(pageMeta, lot);
+  const seizedMainPoints = buildSeizedMainPoints(pageMeta);
+  const seizedCautionItems = buildSeizedCautionItems(pageMeta, areaRows, usageRows);
   const roadAddress = lot.roadAddress || detailItem.rdnmAdrs || raw.rdnmAdrs || raw.roadNmRadr || "-";
   const lotAddress = pickFullLotAddress(lot, detailItem);
   const isSeized = /압류/.test(propertyTag);
@@ -1721,7 +1825,34 @@ function LotDetailPanel({
             aria-labelledby="lot-detail-tab-seized"
           >
             <h3 id="lot-detail-tab-seized"><CheckCircle2 size={18} /> 압류재산정보</h3>
-              <div className="lot-detail-field-grid">
+              {isSeized ? (
+                <div className="lot-detail-seized-card">
+                  <div className="lot-detail-seized-card-head">
+                    <AlertCircle size={18} />
+                    <strong>입찰 전 알아야 할 주요사항</strong>
+                  </div>
+                  <ul className="lot-detail-seized-main-list">
+                    {seizedMainPoints.map((point) => (
+                      <li key={point}>{point}</li>
+                    ))}
+                  </ul>
+                  {seizedCautionItems.length > 0 && (
+                    <ul className="lot-detail-seized-caution-list">
+                      {seizedCautionItems.map((item) => (
+                        <li
+                          key={item.text}
+                          className={item.highlight ? "lot-detail-seized-blink" : ""}
+                        >
+                          {item.text}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : (
+                <p className="muted">압류재산이 아닌 물건입니다.</p>
+              )}
+              <div className="lot-detail-field-grid lot-detail-field-grid-compact">
                 <div className="lot-detail-field">
                   <strong>재산구분</strong>
                   <span>{propertyTag}</span>
