@@ -12,8 +12,10 @@
     "build:phone": "node scripts/build-phone.mjs",
     "build:inner": "vite build",
     "preview": "vite preview --host 0.0.0.0",
+    "prestart": "node scripts/ensure-build.mjs",
     "start": "node server/index.js",
     "prod": "node scripts/build.mjs && node server/index.js",
+    "refresh": "node scripts/build.mjs && node scripts/ensure-build.mjs",
     "start:phone": "node scripts/build.mjs && node scripts/phone-launch.mjs --port 3000 --server prod --keep-alive"
   },
   "dependencies": {

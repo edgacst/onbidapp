@@ -3,7 +3,7 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { loadEnvFiles } from "./load-env.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -62,8 +62,11 @@ if (existsSync(distPath)) {
   app.use(
     express.static(distPath, {
       setHeaders(res, filePath) {
-        if (filePath.endsWith(`${path.sep}index.html`)) {
+        const baseName = path.basename(filePath);
+        if (baseName === "index.html" || baseName.endsWith(".webmanifest")) {
           res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
           return;
         }
         if (filePath.includes(`${path.sep}assets${path.sep}`)) {
@@ -74,6 +77,8 @@ if (existsSync(distPath)) {
   );
   app.get(/^(?!\/onbid-api|\/onbid-file).*/, (_req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.sendFile(path.join(distPath, "index.html"));
   });
 } else {
@@ -101,7 +106,18 @@ app.listen(port, "0.0.0.0", () => {
     console.log(`   폰(Wi-Fi): http://${address}:${port}`);
   }
   console.log(`   폰(USB):  npm run phone  → http://127.0.0.1:${port}`);
-  if (!existsSync(distPath)) {
+  if (existsSync(distPath)) {
+    try {
+      const distIndex = path.join(distPath, "index.html");
+      const builtAt = statSync(distIndex).mtime.toLocaleString("ko-KR");
+      const assets = readdirSync(path.join(distPath, "assets")).filter((name) => name.endsWith(".css")).join(", ");
+      console.log(`   dist 빌드: ${builtAt}`);
+      console.log(`   CSS: ${assets || "없음"}`);
+      console.log("   ※ git pull 후에는 npm start 만 해도 자동 빌드됩니다.");
+    } catch {
+      // ignore dist read errors
+    }
+  } else {
     console.log("   (프론트 빌드 없음 — API 프록시만 동작)");
   }
 });
