@@ -1563,8 +1563,7 @@ function LotDetailPanel({
             aria-labelledby="lot-detail-tab-market"
           >
             <h3 id="lot-detail-tab-market"><CheckCircle2 size={18} /> 인근 시세 및 낙찰 사례</h3>
-            <p className="muted">인근 시세와 낙찰 사례는 온비드 원문에서 확인할 수 있습니다.</p>
-            <a className="secondary-action" href={onbidUrl} target="_blank" rel="noreferrer">온비드에서 보기 <ExternalLink size={16} /></a>
+            <p className="muted">인근 시세와 낙찰 사례는 온비드 원문에서 확인할 수 있습니다. 하단의 온비드 상세 보기를 이용하세요.</p>
           </section>
         </div>
       </section>
