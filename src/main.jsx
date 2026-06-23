@@ -676,33 +676,58 @@ function extractOnbidAreaNoteItems(html) {
   return notes;
 }
 
-function extractOnbidSeizedBrief(html) {
-  const idx = html.indexOf('id="szrPrptBidPrmrMtrs"');
-  if (idx < 0) return { mainPoints: [], cautionItems: [] };
-
-  const slice = html.slice(idx, idx + 6000);
-  const listMatch = slice.match(/<ul class="dot_list03">([\s\S]*?)<\/ul>/);
-  if (!listMatch) return { mainPoints: [], cautionItems: [] };
-
-  const mainPoints = [];
-  const cautionItems = [];
-  for (const liMatch of listMatch[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)) {
-    const inner = liMatch[1];
-    const plain = cleanOnbidText(inner.replace(/<ul[\s\S]*$/, ""));
-    const nested = inner.match(/<ul class="dash_list03">([\s\S]*?)<\/ul>/);
-    if (plain.includes("유의사항")) {
-      mainPoints.push("유의사항");
-      if (nested) {
-        for (const subMatch of nested[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)) {
-          const text = cleanOnbidText(subMatch[1]);
-          if (text) cautionItems.push(text);
-        }
-      }
-    } else if (plain) {
-      mainPoints.push(plain);
+function extractSeizedCautionFromLi(inner) {
+  const items = [];
+  const nested = inner.match(/<ul class="dash_list03">([\s\S]*?)<\/ul>/);
+  if (nested) {
+    for (const subMatch of nested[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)) {
+      const text = cleanOnbidText(subMatch[1]);
+      if (text) items.push(text);
     }
   }
-  return { mainPoints, cautionItems };
+
+  const txtDiv = inner.match(/<div class="txt_type01">([\s\S]*?)<\/div>/i);
+  if (txtDiv) {
+    for (const part of txtDiv[1].split(/<br\s*\/?>/i)) {
+      const text = cleanOnbidText(part.replace(/^[-–—]\s*/, ""));
+      if (text) items.push(text);
+    }
+  }
+
+  return items;
+}
+
+function extractOnbidSeizedBrief(html) {
+  const blockIds = ['id="szrPrptBidPrmrMtrs"', 'id="szrPrptBidPrmrMtrsMobile"'];
+  let best = { mainPoints: [], cautionItems: [] };
+
+  for (const blockId of blockIds) {
+    const idx = html.indexOf(blockId);
+    if (idx < 0) continue;
+
+    const slice = html.slice(idx, idx + 8000);
+    const listMatch = slice.match(/<ul class="dot_list03">([\s\S]*?)<\/ul>/);
+    if (!listMatch) continue;
+
+    const mainPoints = [];
+    const cautionItems = [];
+    for (const liMatch of listMatch[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)) {
+      const inner = liMatch[1];
+      const plain = cleanOnbidText(inner.replace(/<(?:ul|div)[\s\S]*$/i, ""));
+      if (plain.includes("유의사항")) {
+        mainPoints.push("유의사항");
+        cautionItems.push(...extractSeizedCautionFromLi(inner));
+      } else if (plain) {
+        mainPoints.push(plain);
+      }
+    }
+
+    if (cautionItems.length > best.cautionItems.length || (mainPoints.length && !best.mainPoints.length)) {
+      best = { mainPoints, cautionItems };
+    }
+  }
+
+  return best;
 }
 
 const DEFAULT_SEIZED_MAIN_POINTS = [
@@ -916,7 +941,7 @@ const onbidPageMetaCache = new Map();
 
 async function fetchOnbidPageMeta(lot, detail = null) {
   if (!lot?.id) return null;
-  const cacheKey = `${lot.id}:${lot.conditionNo || ""}:${detail?.item?.onbidPbancNo || lot.noticeNo || ""}`;
+  const cacheKey = `meta-v2:${lot.id}:${lot.conditionNo || ""}:${detail?.item?.onbidPbancNo || lot.noticeNo || ""}`;
   if (onbidPageMetaCache.has(cacheKey)) return onbidPageMetaCache.get(cacheKey);
 
   const url = onbidDetailPageProxyUrl(lot, detail);
