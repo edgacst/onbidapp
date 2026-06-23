@@ -437,34 +437,77 @@ function mapLinks(lot) {
 }
 
 function onbidSearchUrl(lot) {
-  const query = encodeURIComponent(lot.id || lot.title);
-  return `https://www.onbid.co.kr/op/ppa/plnmmn/publicAnnounceList.do?searchCltrNm=${query}`;
+  const query = encodeURIComponent(lot.id || lot.title || "");
+  if (isOnbidLotId(lot.id || lot.title)) {
+    return `https://www.onbid.co.kr/op/cltrpbancinf/toppagemng/unfsrch/UnfSrchController/mvmnUnfSrchClg.do?searchType=CLTR&searchKeyword=${query}`;
+  }
+  return `https://www.onbid.co.kr/op/cltrpbancinf/toppagemng/unfsrch/UnfSrchController/mvmnUnfSrchClg.do?searchKeyword=${query}`;
+}
+
+function pickOnbidLinkFields(lot, detail = null) {
+  const raw = lot?.raw ?? {};
+  const detailItem = detail?.item ?? {};
+  const id = lot?.id || raw.cltrMngNo || detailItem.cltrMngNo || "";
+  return {
+    id,
+    title: lot?.title || raw.onbidCltrNm || detailItem.onbidCltrNm || "",
+    assetType: lot?.assetType || assetTypeFromLotId(id),
+    prptDivCd: raw.prptDivCd || detailItem.prptDivCd || "",
+    onbidNo: lot?.onbidNo || raw.onbidCltrno || detailItem.onbidCltrno || "",
+    conditionNo: lot?.conditionNo || raw.pbctCdtnNo || detailItem.pbctCdtnNo || "",
+    pbctNo: lot?.pbctNo || raw.pbctNo || detailItem.pbctNo || "",
+    noticeNo: lot?.noticeNo || raw.onbidPbancNo || detailItem.onbidPbancNo || "",
+  };
+}
+
+function mergeLotWithDetail(lot, detail) {
+  if (!lot) return null;
+  const item = detail?.item;
+  if (!item || !Object.keys(item).length) return lot;
+  const raw = { ...(lot.raw || {}), ...item };
+  return {
+    ...lot,
+    onbidNo: lot.onbidNo || item.onbidCltrno || "",
+    conditionNo: lot.conditionNo || item.pbctCdtnNo || "",
+    pbctNo: lot.pbctNo || item.pbctNo || "",
+    noticeNo: lot.noticeNo || item.onbidPbancNo || "",
+    raw,
+  };
 }
 
 function onbidDetailScreen(lot) {
   if (lot?.assetType === "car") return { cltrPrptDivCd: "6", cltrScrnGrpCd: "2" };
   if (lot?.assetType === "movable") return { cltrPrptDivCd: "7", cltrScrnGrpCd: "3" };
+  if (lot?.prptDivCd === "0010") return { cltrPrptDivCd: "10", cltrScrnGrpCd: "1" };
   return { cltrPrptDivCd: "5", cltrScrnGrpCd: "1" };
 }
 
-function onbidDetailUrl(lot) {
-  if (!lot?.onbidNo || !lot?.conditionNo || !lot?.pbctNo) {
-    return onbidSearchUrl(lot);
+function onbidDetailUrl(lot, detail = null) {
+  const fields = pickOnbidLinkFields(lot, detail);
+  if (!fields.onbidNo || !fields.conditionNo || !fields.pbctNo || !fields.noticeNo) {
+    return onbidSearchUrl(fields);
   }
-  const screen = onbidDetailScreen(lot);
+  const screen = onbidDetailScreen(fields);
   const query = new URLSearchParams({
     cltrPrptDivCd: screen.cltrPrptDivCd,
     cltrScrnGrpCd: screen.cltrScrnGrpCd,
-    onbidCltrno: String(lot.onbidNo),
-    pbctCdtnNo: String(lot.conditionNo),
-    pbctNo: String(lot.pbctNo),
+    onbidCltrno: String(fields.onbidNo),
+    onbidPbancNo: String(fields.noticeNo),
+    pbctCdtnNo: String(fields.conditionNo),
+    pbctNo: String(fields.pbctNo),
   });
-  if (lot.noticeNo) query.set("onbidPbancNo", String(lot.noticeNo));
   return `https://www.onbid.co.kr/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do?${query.toString()}`;
 }
 
-function onbidDetailPageProxyUrl(lot) {
-  const url = onbidDetailUrl(lot);
+function openExternalUrl(url, event) {
+  if (!url) return;
+  event?.preventDefault();
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (!opened) window.location.assign(url);
+}
+
+function onbidDetailPageProxyUrl(lot, detail = null) {
+  const url = onbidDetailUrl(lot, detail);
   if (!url.startsWith("https://www.onbid.co.kr")) return "";
   return toOnbidFileProxy(url.replace("https://www.onbid.co.kr", ""));
 }
@@ -648,12 +691,12 @@ function parseOnbidDetailHtml(html) {
 
 const onbidPageMetaCache = new Map();
 
-async function fetchOnbidPageMeta(lot) {
+async function fetchOnbidPageMeta(lot, detail = null) {
   if (!lot?.id) return null;
-  const cacheKey = `${lot.id}:${lot.conditionNo || ""}`;
+  const cacheKey = `${lot.id}:${lot.conditionNo || ""}:${detail?.item?.onbidPbancNo || lot.noticeNo || ""}`;
   if (onbidPageMetaCache.has(cacheKey)) return onbidPageMetaCache.get(cacheKey);
 
-  const url = onbidDetailPageProxyUrl(lot);
+  const url = onbidDetailPageProxyUrl(lot, detail);
   if (!url) return null;
 
   try {
@@ -1164,7 +1207,7 @@ function LotDetailPanel({
   const isSeized = /압류/.test(propertyTag);
   const statusLabel = statusGroup(lot) === "ready" ? "입찰시작 전" : lot.status;
   const deptLine = [raw.chrgDeptNm || raw.dpslDeptNm, raw.chrgTelno || raw.telNo].filter(Boolean).join(" / ");
-  const onbidUrl = onbidDetailUrl(lot);
+  const onbidUrl = onbidDetailUrl(lot, detail);
 
   return (
     <article className={`lot-detail-panel lot-detail-panel--${layout}`}>
@@ -1235,9 +1278,9 @@ function LotDetailPanel({
 
           <div className="lot-detail-quick-actions">
             <a href={links?.kakao} target="_blank" rel="noreferrer">상권분석</a>
-            <a href={onbidUrl} target="_blank" rel="noreferrer">등기열람하기</a>
+            <a href={onbidUrl} target="_blank" rel="noreferrer" onClick={(event) => openExternalUrl(onbidUrl, event)}>등기열람하기</a>
             <a href={links?.kakao} target="_blank" rel="noreferrer">지도</a>
-            <a className="primary" href={onbidUrl} target="_blank" rel="noreferrer">공고보기</a>
+            <a className="primary" href={onbidUrl} target="_blank" rel="noreferrer" onClick={(event) => openExternalUrl(onbidUrl, event)}>공고보기</a>
           </div>
 
           <div className="lot-detail-spec-grid">
@@ -1335,7 +1378,7 @@ function LotDetailPanel({
       {isSeized && (
         <div className="lot-detail-warning">
           <p>※ 해당 재산은 압류재산입니다. 입찰전 주의사항을 반드시 확인하세요.</p>
-          <a href={onbidUrl} target="_blank" rel="noreferrer">입찰 전 주의사항</a>
+          <a href={onbidUrl} target="_blank" rel="noreferrer" onClick={(event) => openExternalUrl(onbidUrl, event)}>입찰 전 주의사항</a>
         </div>
       )}
 
@@ -1569,7 +1612,7 @@ function LotDetailPanel({
       </section>
 
       <div className="lot-detail-footer-actions">
-        <a className="secondary-action" href={onbidUrl} target="_blank" rel="noreferrer">온비드 상세 보기 <ExternalLink size={16} /></a>
+        <a className="secondary-action" href={onbidUrl} target="_blank" rel="noreferrer" onClick={(event) => openExternalUrl(onbidUrl, event)}>온비드 상세 보기 <ExternalLink size={16} /></a>
         <button className="primary-action" type="button" onClick={onBidCheck}>검토표 <ChevronRight size={18} /></button>
       </div>
     </article>
@@ -2275,7 +2318,8 @@ function App() {
           note: "상세 API에서 물건 정보를 불러오는 중입니다.",
         }
       : sortedLots[0]);
-  const links = selected ? mapLinks(selected) : null;
+  const selectedLot = useMemo(() => mergeLotWithDetail(selected, detail), [selected, detail]);
+  const links = selectedLot ? mapLinks(selectedLot) : null;
   const displayPhotos = galleryPhotos;
   const totalMinimum = sortedLots.reduce((sum, lot) => sum + (lot.minimum ?? 0), 0);
   const averageDiscount = Math.round(sortedLots.reduce((sum, lot) => sum + lot.discount, 0) / sortedLots.length || 0);
@@ -2529,7 +2573,7 @@ function App() {
 
     let cancelled = false;
     setPageMetaLoading(true);
-    fetchOnbidPageMeta(selected)
+    fetchOnbidPageMeta(selectedLot, detail)
       .then((nextMeta) => {
         if (!cancelled) setPageMeta(nextMeta);
       })
@@ -2543,7 +2587,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [selected?.id, selected?.conditionNo, selected?.onbidNo, selected?.pbctNo, selected?.noticeNo, data.sample]);
+  }, [selectedLot?.id, selectedLot?.conditionNo, selectedLot?.onbidNo, selectedLot?.pbctNo, selectedLot?.noticeNo, detail?.item, data.sample]);
 
   useEffect(() => {
     if (!selected || data.sample || loading) {
@@ -3320,7 +3364,7 @@ function App() {
           <section className="detail-page">
             <button className="back-button" onClick={() => openView("search")}>목록으로</button>
             <LotDetailPanel
-              lot={selected}
+              lot={selectedLot}
               detail={detail}
               pageMeta={pageMeta}
               pageMetaLoading={pageMetaLoading}
@@ -3511,7 +3555,7 @@ function App() {
           {selected && (
             <aside className="detail-panel">
               <LotDetailPanel
-                lot={selected}
+                lot={selectedLot}
                 detail={detail}
                 pageMeta={pageMeta}
                 pageMetaLoading={pageMetaLoading}
