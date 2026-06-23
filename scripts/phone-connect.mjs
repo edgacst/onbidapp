@@ -41,7 +41,7 @@ async function main() {
   const deviceId = devices[0];
   const ports = options.ports.length
     ? options.ports
-    : [Number(process.env.PHONE_DEV_PORT || 5173), Number(process.env.PHONE_PROD_PORT || 3000)];
+    : [Number(process.env.PHONE_PROD_PORT || 3000), Number(process.env.PHONE_DEV_PORT || 5173)];
 
   for (const port of ports) {
     setupAdbReverse(port, deviceId);
@@ -66,8 +66,10 @@ async function main() {
 
   if (!serverRunning) {
     console.log("\n서버 먼저 실행:");
-    console.log("  개발: npm run dev");
-    console.log("  운영: npm run build && npm start");
+    console.log("  운영(권장): npm start");
+    console.log("  개발:       npm run dev");
+  } else if (activePort === 5173) {
+    console.log("\n※ 개발 서버(5173)에 연결됨. 최신 빌드 확인은 npm start 후 :3000 사용");
   }
 }
 
