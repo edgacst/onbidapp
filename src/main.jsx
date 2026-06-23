@@ -462,6 +462,61 @@ function needsBidCheck(lot) {
   return lot.shareYn === "Y" || lot.discount >= 50 || daysLeft(lot.ends) <= 7 || /준비|진행|입찰/.test(lot.status);
 }
 
+function buildBidReviewItems(lot, pageMeta) {
+  const capabilityTags = lotCapabilityTags(lot, pageMeta);
+  const restrictionTags = bidRestrictionTags(lot, pageMeta);
+  const days = daysLeft(lot.ends);
+  return [
+    {
+      id: "deadline",
+      label: "입찰 마감일",
+      value: lot.ends ? `${lot.starts || ""} ~ ${lot.ends}` : "일정 확인",
+      warn: days <= 7,
+      note: days <= 7 ? `마감 ${days}일 전` : "",
+    },
+    {
+      id: "share",
+      label: "지분물건 여부",
+      value: lot.shareYn === "Y" ? "지분물건" : "단독물건",
+      warn: lot.shareYn === "Y",
+    },
+    {
+      id: "price",
+      label: "최저입찰가 / 감정가",
+      value: `${formatFullMoney(lot.minimum)} / ${formatFullMoney(lot.appraised)}`,
+      warn: lot.discount >= 50,
+      note: lot.discount ? `감정가 대비 ${lot.discount}%` : "",
+    },
+    {
+      id: "failed",
+      label: "유찰횟수",
+      value: `${lot.failedCount ?? 0}회`,
+      warn: Number(lot.failedCount ?? 0) >= 3,
+    },
+    {
+      id: "bid-style",
+      label: "입찰방식",
+      value: lot.bidStyle || lot.bidMethod || "-",
+    },
+    {
+      id: "bid-method",
+      label: "입찰방법",
+      value: capabilityTags.length ? capabilityTags.join(", ") : "온비드 원문 확인",
+    },
+    {
+      id: "restriction",
+      label: "입찰제한",
+      value: restrictionTags.length ? restrictionTags.join(", ") : "특이 제한 없음",
+    },
+    {
+      id: "delivery",
+      label: "인도·인수 / 권리",
+      value: lot.note || "온비드 공고문·등기 확인",
+      warn: /압류|주의|인도/.test(String(lot.note || "")),
+    },
+  ];
+}
+
 function buildAddress(lot) {
   return lot.address || lot.title || [lot.region, lot.category].filter(Boolean).join(" ");
 }
@@ -1183,7 +1238,6 @@ function LotDetailPanel({
   links,
   isSaved,
   onToggleSaved,
-  onBidCheck,
   layout = "page",
   resultFocus = false,
 }) {
@@ -1191,11 +1245,15 @@ function LotDetailPanel({
   const detailItem = detail?.item || {};
   const showResult = isResultLot(lot) || resultFocus;
   const resultFields = showResult ? buildResultFields(lot) : null;
+  const reviewItems = useMemo(() => buildBidReviewItems(lot, pageMeta), [lot, pageMeta]);
   const [mediaMode, setMediaMode] = useState("photo");
   const [usePyeong, setUsePyeong] = useState(false);
   const [activeTab, setActiveTab] = useState(showResult ? "result" : "spec");
   const [photoIndex, setPhotoIndex] = useState(0);
   const [photoFallbacks, setPhotoFallbacks] = useState({});
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewChecks, setReviewChecks] = useState({});
+  const reviewRef = useRef(null);
   const sectionRefs = useRef({});
   const scrollingToTab = useRef(false);
 
@@ -1215,8 +1273,23 @@ function LotDetailPanel({
 
   useEffect(() => {
     setActiveTab(showResult ? "result" : "spec");
+    setReviewOpen(false);
+    setReviewChecks({});
     sectionRefs.current = {};
   }, [lot?.id, showResult]);
+
+  function openBidReview() {
+    setReviewOpen(true);
+    requestAnimationFrame(() => {
+      reviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function toggleReviewCheck(itemId) {
+    setReviewChecks((current) => ({ ...current, [itemId]: !current[itemId] }));
+  }
+
+  const reviewDoneCount = reviewItems.filter((item) => reviewChecks[item.id]).length;
 
   function goToDetailTab(tabId) {
     setActiveTab(tabId);
@@ -1733,9 +1806,42 @@ function LotDetailPanel({
         </div>
       </section>
 
+      {reviewOpen && (
+        <section className="lot-bid-review-card" ref={reviewRef} aria-labelledby="lot-bid-review-title">
+          <div className="lot-bid-review-head">
+            <div>
+              <h3 id="lot-bid-review-title"><ShieldAlert size={18} /> 입찰 검토표</h3>
+              <p>입찰 전 아래 항목을 확인하고 체크하세요. ({reviewDoneCount}/{reviewItems.length})</p>
+            </div>
+            <button type="button" className="icon-button" aria-label="검토표 닫기" onClick={() => setReviewOpen(false)}>
+              <X size={18} />
+            </button>
+          </div>
+          <ul className="lot-bid-review-list">
+            {reviewItems.map((item) => (
+              <li key={item.id} className={item.warn ? "warn" : ""}>
+                <label className="lot-bid-review-item">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(reviewChecks[item.id])}
+                    onChange={() => toggleReviewCheck(item.id)}
+                  />
+                  <span className="lot-bid-review-copy">
+                    <strong>{item.label}</strong>
+                    <em>{item.value}</em>
+                    {item.note && <small>{item.note}</small>}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <p className="lot-bid-review-foot muted">최종 권리관계·공고문은 온비드 원문에서 반드시 확인하세요.</p>
+        </section>
+      )}
+
       <div className="lot-detail-footer-actions">
         <a className="secondary-action" href={onbidUrl} target="_blank" rel="noreferrer" onClick={(event) => openExternalUrl(onbidUrl, event)}>온비드 상세 보기 <ExternalLink size={16} /></a>
-        <button className="primary-action" type="button" onClick={onBidCheck}>검토표 <ChevronRight size={18} /></button>
+        <button className="primary-action" type="button" onClick={openBidReview}>검토표 <ChevronRight size={18} /></button>
       </div>
     </article>
   );
@@ -3314,7 +3420,7 @@ function App() {
 
             <section className="home-info-grid">
               <button onClick={() => openView("board")}><MessageCircleQuestion size={22} /><strong>질문게시판</strong><span>질문 보기 · 새 작성하기</span></button>
-              <button onClick={openBidCheck}><ShieldAlert size={22} /><strong>입찰참가 안내</strong><span>일정·가격·지분 체크</span></button>
+              <button onClick={openBidCheck}><ShieldAlert size={22} /><strong>입찰 체크 목록</strong><span>검토 필요 물건 모아보기</span></button>
               <button onClick={() => openStatus("sold")}><Star size={22} /><strong>낙찰결과</strong><span>최근 개찰 결과 확인</span></button>
               <button onClick={openNoticeBoard}><Bell size={22} /><strong>공지사항</strong><span>서비스 안내와 변경사항</span></button>
               {isAdminMember(member) && (
@@ -3342,7 +3448,7 @@ function App() {
             <div className="quick-grid">
               <button onClick={() => openView("search")}><Building2 size={20} /><strong>물건 탐색</strong><span>온비드 목록 조회</span></button>
               <button onClick={() => openView("map")}><Navigation size={20} /><strong>지도 검색</strong><span>3개 지도 연결</span></button>
-              <button onClick={openBidCheck}><ShieldAlert size={20} /><strong>입찰 체크</strong><span>지분·일정·가격</span></button>
+              <button onClick={openBidCheck}><ShieldAlert size={20} /><strong>입찰 체크 목록</strong><span>검토 필요 물건</span></button>
             </div>
 
             <section className="home-section">
@@ -3759,7 +3865,6 @@ function App() {
               links={links}
               isSaved={saved.includes(selected.id)}
               onToggleSaved={() => toggleSaved(selected.id)}
-              onBidCheck={openBidCheck}
               layout="page"
               resultFocus={isResultFocus(statusFocus)}
             />
@@ -3966,7 +4071,6 @@ function App() {
                 links={links}
                 isSaved={saved.includes(selected.id)}
                 onToggleSaved={() => toggleSaved(selected.id)}
-                onBidCheck={openBidCheck}
                 layout="aside"
                 resultFocus={isResultFocus(statusFocus)}
               />
