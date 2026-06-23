@@ -742,6 +742,118 @@ function extractOnbidSeizedBrief(html) {
   return best;
 }
 
+function parseOnbidMobileCardItems(html) {
+  const items = [];
+  for (const liMatch of html.matchAll(/<li class="col_item">([\s\S]*?)<\/li>/g)) {
+    const fields = {};
+    for (const box of liMatch[1].matchAll(/<span class="tit01">([^<]*)<\/span>\s*<span class="txt01">\s*([\s\S]*?)\s*<\/span>/g)) {
+      fields[cleanOnbidText(box[1])] = cleanOnbidText(box[2]);
+    }
+    if (Object.keys(fields).length) items.push(fields);
+  }
+  return items;
+}
+
+function parseOnbidAjaxLeaseRows(html) {
+  if (!html || html.includes("no_data")) return [];
+  return parseOnbidMobileCardItems(html).map((fields) => ({
+    category: fields["임대차내용"] || "-",
+    name: fields["성명"] || "-",
+    deposit: fields["보증금(원)"] || "-",
+    rent: fields["차임(월세)(원)"] || "-",
+    convertedDeposit: fields["환산보증금(원)"] || "-",
+    confirmDate: fields["확정(설정)일"] || "-",
+    moveInDate: fields["전입일"] || "-",
+  }));
+}
+
+function parseOnbidAjaxRegistryRows(html) {
+  if (!html || html.includes("no_data")) return [];
+  return parseOnbidMobileCardItems(html).map((fields) => ({
+    kind: fields["권리종류"] || "-",
+    holder: fields["권리자명"] || "-",
+    date: fields["설정일자"] || "-",
+    amount: fields["설정금액"] || "-",
+  }));
+}
+
+function parseOnbidAjaxDistributionRows(html) {
+  if (!html || html.includes("no_data")) return [];
+  return parseOnbidMobileCardItems(html).map((fields) => ({
+    creditor: fields["채권자"] || fields["권리자"] || fields["성명"] || "-",
+    claimType: fields["채권종류"] || fields["구분"] || fields["권리종류"] || "-",
+    amount: fields["배분요구액(원)"] || fields["채권액(원)"] || fields["금액(원)"] || fields["설정금액"] || "-",
+    note: fields["비고"] || "-",
+  }));
+}
+
+function parseOnbidAjaxOccupancyRows(html) {
+  if (!html || html.includes("no_data")) return [];
+  return parseOnbidMobileCardItems(html).map((fields) => ({
+    relation: fields["점유관계"] || fields["구분"] || "-",
+    occupant: fields["점유자"] || fields["성명"] || "-",
+    note: fields["점유현황"] || fields["비고"] || "-",
+  }));
+}
+
+function extractOnbidDetailFormParams(html) {
+  const form = html.match(/<form[^>]*id="srchCltrDtlFrm"[\s\S]*?<\/form>/);
+  if (!form) return null;
+  const params = {};
+  for (const m of form[0].matchAll(/name="([^"]+)"[^>]*value="([^"]*)"/g)) {
+    params[m[1]] = m[2];
+  }
+  return Object.keys(params).length ? params : null;
+}
+
+const ONBID_AJAX_BASE = "/onbid-file/op/cltrpbancinf/cltrdtl/CltrDtlController";
+
+async function postOnbidAjax(endpoint, params) {
+  const body = new URLSearchParams({
+    ...params,
+    viewMode: "Mobile",
+    pageUnit: "10",
+    pageIndex: "1",
+    szrPrptRls: "OPEN",
+  });
+  const response = await apiFetch(`${ONBID_AJAX_BASE}/${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!response.ok) return "";
+  return response.text();
+}
+
+async function fetchOnbidAjaxMeta(formParams) {
+  if (!formParams) return null;
+  try {
+    const [leaseHtml, registryHtml, bondHtml, occupancyHtml] = await Promise.all([
+      postOnbidAjax("inqLeasInfClg.do", formParams),
+      postOnbidAjax("inqRgstMtrsCrtiClg.do", formParams),
+      postOnbidAjax("inqBondDclrPscdClg.do", formParams),
+      postOnbidAjax("inqOcpyRelClg.do", formParams),
+    ]);
+
+    const ajaxLeaseRows = parseOnbidAjaxLeaseRows(leaseHtml);
+    const ajaxRegistryRows = parseOnbidAjaxRegistryRows(registryHtml);
+    const ajaxDistributionRows = parseOnbidAjaxDistributionRows(bondHtml);
+    const ajaxOccupancyRows = parseOnbidAjaxOccupancyRows(occupancyHtml);
+
+    return {
+      ajaxLeaseRows: ajaxLeaseRows.length ? ajaxLeaseRows : undefined,
+      ajaxRegistryRows: ajaxRegistryRows.length ? ajaxRegistryRows : undefined,
+      ajaxDistributionRows: ajaxDistributionRows.length ? ajaxDistributionRows : undefined,
+      ajaxOccupancyRows: ajaxOccupancyRows.length ? ajaxOccupancyRows : undefined,
+      rightsAnalysisNotice: /권리분석 기초/.test(bondHtml)
+        ? "권리분석·예상 부대비용은 입찰 시작 7일 전부터 온비드에서 공개됩니다."
+        : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 const DEFAULT_SEIZED_MAIN_POINTS = [
   "공매재산에 대하여 등기된 권리 또는 가처분으로서 매각으로 효력을 잃지 아니하는 것",
   "공매재산의 매수인으로서 일정한 자격을 필요로 하는 경우 그 사실",
@@ -768,10 +880,11 @@ function buildSeizedCautionItems(pageMeta, detailItem = null) {
     items.push({ text: cleaned, highlight });
   };
 
-  const source = fromApi.length ? fromApi : fromHtml;
-  if (source.length) {
-    source.forEach((text, index) => pushItem(text, index === 0 || /인도|명도/.test(text)));
-  } else {
+  [...fromApi, ...fromHtml].forEach((text, index) => {
+    pushItem(text, index === 0 || /인도|명도/.test(text));
+  });
+
+  if (!items.length) {
     pushItem(DEFAULT_DELIVERY_CAUTION, true);
   }
 
@@ -959,8 +1072,16 @@ function mergePageMeta(apiMeta, htmlMeta) {
         ? htmlMeta.deliveryRows
         : apiMeta.deliveryRows,
     seizedMainPoints: apiMeta.seizedMainPoints?.length ? apiMeta.seizedMainPoints : htmlMeta.seizedMainPoints,
-    seizedCautionItems: apiMeta.seizedCautionItems?.length ? apiMeta.seizedCautionItems : htmlMeta.seizedCautionItems,
+    seizedCautionItems: [
+      ...(apiMeta.seizedCautionItems || []),
+      ...(htmlMeta.seizedCautionItems || []),
+    ].filter((item, index, list) => list.indexOf(item) === index),
     areaNoteItems: htmlMeta.areaNoteItems?.length ? htmlMeta.areaNoteItems : apiMeta.areaNoteItems,
+    ajaxLeaseRows: htmlMeta.ajaxLeaseRows?.length ? htmlMeta.ajaxLeaseRows : apiMeta.ajaxLeaseRows,
+    ajaxRegistryRows: htmlMeta.ajaxRegistryRows?.length ? htmlMeta.ajaxRegistryRows : apiMeta.ajaxRegistryRows,
+    ajaxDistributionRows: htmlMeta.ajaxDistributionRows?.length ? htmlMeta.ajaxDistributionRows : apiMeta.ajaxDistributionRows,
+    ajaxOccupancyRows: htmlMeta.ajaxOccupancyRows?.length ? htmlMeta.ajaxOccupancyRows : apiMeta.ajaxOccupancyRows,
+    rightsAnalysisNotice: htmlMeta.rightsAnalysisNotice || apiMeta.rightsAnalysisNotice,
   };
 }
 
@@ -1083,7 +1204,7 @@ const onbidPageMetaCache = new Map();
 
 async function fetchOnbidPageMeta(lot, detail = null) {
   if (!lot?.id) return null;
-  const cacheKey = `meta-v4:${lot.id}:${lot.conditionNo || ""}:${detail?.item?.onbidPbancNo || lot.noticeNo || ""}:${detail?.item?.cltrMngNo || ""}`;
+  const cacheKey = `meta-v5:${lot.id}:${lot.conditionNo || ""}:${detail?.item?.onbidPbancNo || lot.noticeNo || ""}:${detail?.item?.cltrMngNo || ""}`;
   if (onbidPageMetaCache.has(cacheKey)) return onbidPageMetaCache.get(cacheKey);
 
   const apiMeta = buildPageMetaFromDetailItem(detail?.item);
@@ -1102,7 +1223,9 @@ async function fetchOnbidPageMeta(lot, detail = null) {
       return apiMeta;
     }
     const htmlMeta = parseOnbidDetailHtml(html);
-    const merged = mergePageMeta(apiMeta, htmlMeta);
+    const formParams = extractOnbidDetailFormParams(html);
+    const ajaxMeta = await fetchOnbidAjaxMeta(formParams);
+    const merged = mergePageMeta(mergePageMeta(apiMeta, htmlMeta), ajaxMeta);
     if (merged) onbidPageMetaCache.set(cacheKey, merged);
     return merged;
   } catch {
@@ -1502,8 +1625,8 @@ function pickLocationMapUrl(item = {}) {
   return candidates[0] || "";
 }
 
-function buildLeaseRows(detail) {
-  return asArray(detail?.leaseInfos).map((row) => ({
+function buildLeaseRows(detail, pageMeta) {
+  const fromDetail = asArray(detail?.leaseInfos).map((row) => ({
     category: row.irstDivNm || row.leasDivNm || "-",
     name: row.cltrInprNm || "-",
     deposit: formatOptionalMoney(row.bidGrteeAmt),
@@ -1512,19 +1635,44 @@ function buildLeaseRows(detail) {
     confirmDate: formatOnbidDate(row.cfmtnYmd) || "-",
     moveInDate: formatOnbidDate(row.mvinYmd) || "-",
   }));
+  if (fromDetail.length) return fromDetail;
+  return pageMeta?.ajaxLeaseRows || [];
 }
 
-function buildRegistryRows(detail) {
-  return asArray(detail?.registryInfos).map((row) => ({
+function buildRegistryRows(detail, pageMeta) {
+  const fromDetail = asArray(detail?.registryInfos).map((row) => ({
     kind: row.irstDivNm || row.rgtKndNm || "-",
     holder: row.cltrInprNm || row.rgtNm || "-",
     date: formatOnbidDate(row.rgstYmd) || "-",
     amount: formatRegistryAmount(row.inprStngAmt),
   }));
+  if (fromDetail.length) return fromDetail;
+  return pageMeta?.ajaxRegistryRows || [];
 }
 
-function buildAreaRows(lot, detail) {
-  const fromDetail = asArray(detail?.areas).map((entry) => ({
+function buildDistributionRows(detail, pageMeta) {
+  const fromDetail = asArray(detail?.distributionItems).map((row) => ({
+    creditor: row.crdtrNm || row.bondDclrNm || row.cltrInprNm || "-",
+    claimType: row.bondKndNm || row.dtbtDivNm || row.irstDivNm || "-",
+    amount: formatOptionalMoney(row.bondAmt ?? row.dtbtRqrAmt ?? row.inprStngAmt),
+    note: cleanOnbidText(row.rmrkCntnt || row.rmrk) || "-",
+  }));
+  if (fromDetail.length) return fromDetail;
+  return pageMeta?.ajaxDistributionRows || [];
+}
+
+function buildOccupancyRows(detail, pageMeta) {
+  const fromDetail = asArray(detail?.occupancyRels).map((row) => ({
+    relation: row.ocpyRelNm || row.ocpyDivNm || "-",
+    occupant: row.ocpyNm || row.cltrInprNm || "-",
+    note: cleanOnbidText(row.ocpyPscdCont || row.rmrkCntnt) || "-",
+  }));
+  if (fromDetail.length) return fromDetail;
+  return pageMeta?.ajaxOccupancyRows || [];
+}
+
+function buildAreaRows(lot, detail, pageMeta) {
+  const fromDetail = asArray(detail?.areas).map((entry, index) => ({
     usage: entry.clandCont
       ? formatSqmsUsage(entry.clandCont)
       : entry.cltrUsgNm || entry.usgNm || entry.areaDivNm || entry.usgDivNm || "면적",
@@ -1535,16 +1683,21 @@ function buildAreaRows(lot, detail) {
       ?? String(entry.sqmsCont || "").replace(/[^\d.]/g, ""),
     ),
     share: entry.pursAlcCont || entry.alcCntnt || entry.shrCntnt || "-",
-    note: entry.dtlCltrNm || entry.rmrkCntnt || entry.rmrk || "-",
+    note: entry.dtlCltrNm || entry.rmrkCntnt || entry.rmrk || pageMeta?.areaNoteItems?.[index] || "-",
   })).filter((row) => row.area > 0);
 
-  if (fromDetail.length) return fromDetail;
+  if (fromDetail.length) {
+    return fromDetail.map((row, index) => ({
+      ...row,
+      note: row.note !== "-" ? row.note : (pageMeta?.areaNoteItems?.[index] || "-"),
+    }));
+  }
 
   const rows = [];
-  if (lot.buildingArea) rows.push({ usage: "건물(건물)", area: lot.buildingArea, share: "-", note: "-" });
-  if (lot.landArea) rows.push({ usage: "토지(대)", area: lot.landArea, share: "-", note: "-" });
+  if (lot.buildingArea) rows.push({ usage: "건물(건물)", area: lot.buildingArea, share: "-", note: pageMeta?.areaNoteItems?.[0] || "-" });
+  if (lot.landArea) rows.push({ usage: "토지(대)", area: lot.landArea, share: "-", note: pageMeta?.areaNoteItems?.[rows.length] || "-" });
   const etcArea = Number(lot.raw?.etcSqms ?? lot.raw?.etcAreaSqms ?? 0);
-  if (etcArea) rows.push({ usage: "기타(제시외)", area: etcArea, share: "-", note: "-" });
+  if (etcArea) rows.push({ usage: "기타(제시외)", area: etcArea, share: "-", note: pageMeta?.areaNoteItems?.[rows.length] || "-" });
   return rows;
 }
 
@@ -1580,6 +1733,15 @@ function photoDisplayFallback(url) {
     return url.replace("downloadImageKind=ORGNL_NM", "downloadImageKind=THNL_NM");
   }
   return "";
+}
+
+function DetailSubsection({ title, children }) {
+  return (
+    <div className="lot-detail-subsection">
+      <h4>{title}</h4>
+      {children}
+    </div>
+  );
 }
 
 function DetailTabSection({ id, title, children, sectionRefs }) {
@@ -1631,6 +1793,9 @@ function LotDetailPanel({
   const scrollingToTab = useRef(false);
   const [tabsPinned, setTabsPinned] = useState(false);
   const [tabsBarHeight, setTabsBarHeight] = useState(0);
+  const [isMobileView, setIsMobileView] = useState(() => (
+    typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches
+  ));
 
   const detailTabs = [
     ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
@@ -1646,6 +1811,23 @@ function LotDetailPanel({
     { id: "market", label: "인근시세및낙찰사례" },
     { id: "market-stats", label: "인근낙찰통계" },
   ];
+
+  const mobileTabs = [
+    ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
+    { id: "spec", label: "세부정보" },
+    { id: "seized", label: "압류재산" },
+    { id: "bid-info", label: "입찰정보" },
+    { id: "market", label: "인근시세" },
+  ];
+
+  const visibleTabs = isMobileView ? mobileTabs : detailTabs;
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 760px)");
+    const onChange = () => setIsMobileView(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   useEffect(() => {
     setPhotoIndex(0);
@@ -1698,7 +1880,13 @@ function LotDetailPanel({
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, [detailTabs.length, tabsPinned]);
+  }, [visibleTabs.length, tabsPinned]);
+
+  useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0]?.id || "spec");
+    }
+  }, [isMobileView, visibleTabs, activeTab]);
 
   function openBidReview() {
     setReviewOpen(true);
@@ -1725,7 +1913,7 @@ function LotDetailPanel({
   }
 
   useEffect(() => {
-    const sections = detailTabs
+    const sections = visibleTabs
       .map((tab) => sectionRefs.current[tab.id])
       .filter(Boolean);
     if (!sections.length) return undefined;
@@ -1744,7 +1932,7 @@ function LotDetailPanel({
 
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
-  }, [lot?.id, pageMetaLoading, detailLoading, detailTabs.length]);
+  }, [lot?.id, pageMetaLoading, detailLoading, visibleTabs.length, isMobileView]);
 
   const displayPhotos = dedupePhotos(photos);
   const photoCount = displayPhotos.length;
@@ -1755,7 +1943,9 @@ function LotDetailPanel({
   const heroAreaLine = formatHeroAreaLine(lot, usePyeong);
   const roundLeft = String(raw.pbctNsq || lot.round || "-").padStart(3, "0");
   const roundRight = String(lot.conditionNo || raw.pbctCdtnNo || "-").slice(-3).padStart(3, "0");
-  const areaRows = buildAreaRows(lot, detail);
+  const areaRows = buildAreaRows(lot, detail, pageMeta);
+  const heroAppraised = lot.appraised ?? parseMoney(detailItem.apslEvlAmt ?? detailItem.apslPrc);
+  const heroMinimum = lot.minimum ?? parseMoney(detailItem.lowstBidPrc ?? detailItem.lowstBidPrcIndctCont);
   const bidStyle = lot.bidStyle || formatBidStyle(raw);
   const noticeDate = pageMeta?.noticeDate || lot.noticeDate || "-";
   const firstNoticeDate = pageMeta?.firstNoticeDate || lot.firstNoticeDate || noticeDate || "-";
@@ -1771,10 +1961,10 @@ function LotDetailPanel({
   const seizedMainPoints = buildSeizedMainPoints(pageMeta);
   const seizedCautionItems = buildSeizedCautionItems(pageMeta, detailItem);
   const deliveryNote = formatDeliveryNote(lot, detailItem);
-  const leaseRows = buildLeaseRows(detail);
-  const registryRows = buildRegistryRows(detail);
-  const occupancyCount = asArray(detail?.occupancyRels).length;
-  const distributionCount = asArray(detail?.distributionItems).length;
+  const leaseRows = buildLeaseRows(detail, pageMeta);
+  const registryRows = buildRegistryRows(detail, pageMeta);
+  const distributionRows = buildDistributionRows(detail, pageMeta);
+  const occupancyRows = buildOccupancyRows(detail, pageMeta);
   const locationMapUrl = toOnbidFileProxy(detail?.locationMapUrl || pickLocationMapUrl(detailItem));
   const roadAddress = lot.roadAddress || detailItem.rdnmAdrs || raw.rdnmAdrs || raw.roadNmRadr || "-";
   const lotAddress = pickFullLotAddress(lot, detailItem);
@@ -1926,11 +2116,11 @@ function LotDetailPanel({
           <div className="lot-detail-hero-summary">
             <div className="lot-detail-hero-summary-item">
               <span>감정평가금액(원)</span>
-              <strong>{formatFullMoney(lot.appraised)}</strong>
+              <strong>{formatFullMoney(heroAppraised)}</strong>
             </div>
             <div className="lot-detail-hero-summary-item highlight">
               <span>공매예정가격(원)</span>
-              <strong>{formatFullMoney(lot.minimum)}</strong>
+              <strong>{formatFullMoney(heroMinimum)}</strong>
             </div>
             <div className="lot-detail-hero-summary-item">
               <span>재산유형</span>
@@ -1943,6 +2133,15 @@ function LotDetailPanel({
               </span>
               <strong>{heroAreaLine}</strong>
             </div>
+          </div>
+
+          <div className="lot-detail-hero-agency">
+            <ul>
+              <li><strong>공고기관</strong><span>{lot.agency || "-"}</span></li>
+              <li><strong>담당지점</strong><span>{deptLine || "온비드 원문 확인"}</span></li>
+              <li><strong>공매기관</strong><span>{lot.requestAgency || lot.agency || "-"}</span></li>
+              <li><strong>공고일자</strong><span>{noticeDate}</span></li>
+            </ul>
           </div>
 
           <div className="lot-detail-spec-grid">
@@ -1984,7 +2183,7 @@ function LotDetailPanel({
       <div className={`lot-detail-tabs-bar ${tabsPinned ? "is-pinned" : ""}`} ref={tabsBarRef}>
         <div className="lot-detail-tabs-bar-inner">
           <div className="lot-detail-tabs" role="tablist" aria-label="물건 상세 탭">
-            {detailTabs.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -2197,7 +2396,7 @@ function LotDetailPanel({
                             <td data-label="전입일">{row.moveInDate}</td>
                           </tr>
                         )) : (
-                          <tr><td colSpan={7}>조회된 결과가 없습니다.</td></tr>
+                          <tr><td colSpan={7}>{pageMetaLoading ? "불러오는 중" : "조회된 결과가 없습니다."}</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -2224,7 +2423,7 @@ function LotDetailPanel({
                             <td data-label="설정금액">{row.amount}</td>
                           </tr>
                         )) : (
-                          <tr><td colSpan={4}>조회된 결과가 없습니다.</td></tr>
+                          <tr><td colSpan={4}>{pageMetaLoading ? "불러오는 중" : "조회된 결과가 없습니다."}</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -2233,13 +2432,56 @@ function LotDetailPanel({
 
                   <div className="lot-detail-section">
                     <h4>배분요구 및 채권신고현황</h4>
-                    <p className="muted">{distributionCount > 0 ? `총 ${distributionCount}건` : "조회된 결과가 없습니다."}</p>
+                    {pageMeta?.rightsAnalysisNotice && (
+                      <p className="lot-detail-section-note muted">{pageMeta.rightsAnalysisNotice}</p>
+                    )}
+                    <table className="lot-detail-table lot-detail-mobile-table">
+                      <thead>
+                        <tr>
+                          <th>채권자</th>
+                          <th>구분</th>
+                          <th>금액</th>
+                          <th>비고</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {distributionRows.length > 0 ? distributionRows.map((row, index) => (
+                          <tr key={`${row.creditor}-${row.claimType}-${index}`}>
+                            <td data-label="채권자">{row.creditor}</td>
+                            <td data-label="구분">{row.claimType}</td>
+                            <td data-label="금액">{row.amount}</td>
+                            <td data-label="비고">{row.note}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan={4}>{pageMetaLoading ? "불러오는 중" : "조회된 결과가 없습니다."}</td></tr>
+                        )}
+                      </tbody>
+                    </table>
                     <p className="lot-detail-section-note muted">배분요구서 및 채권신고 기준으로 작성되었으며 배분요구액 및 채권액은 변동될 수 있습니다.</p>
                   </div>
 
                   <div className="lot-detail-section">
                     <h4>점유관계</h4>
-                    <p className="muted">{occupancyCount > 0 ? `총 ${occupancyCount}건` : "조회된 결과가 없습니다."}</p>
+                    <table className="lot-detail-table lot-detail-mobile-table">
+                      <thead>
+                        <tr>
+                          <th>점유관계</th>
+                          <th>점유자</th>
+                          <th>비고</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {occupancyRows.length > 0 ? occupancyRows.map((row, index) => (
+                          <tr key={`${row.relation}-${row.occupant}-${index}`}>
+                            <td data-label="점유관계">{row.relation}</td>
+                            <td data-label="점유자">{row.occupant}</td>
+                            <td data-label="비고">{row.note}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan={3}>{pageMetaLoading ? "불러오는 중" : "조회된 결과가 없습니다."}</td></tr>
+                        )}
+                      </tbody>
+                    </table>
                     <p className="lot-detail-section-note muted">감정평가서 및 현황조사서 기준으로 작성되었으며 변동될 수 있습니다.</p>
                   </div>
                 </>
@@ -2289,8 +2531,101 @@ function LotDetailPanel({
                 <span>{lot.failedCount ?? 0}회</span>
               </div>
             </div>
+            {isMobileView && (
+              <div className="lot-detail-nested-tabs">
+                <DetailSubsection title="입찰방법">
+                  <div className="lot-detail-chip-row">
+                    {capabilityTags.length > 0 ? capabilityTags.map((tag) => (
+                      <span key={tag} className="lot-detail-chip blue">{tag}</span>
+                    )) : <span className="muted">{pageMetaLoading ? "불러오는 중" : "-"}</span>}
+                  </div>
+                </DetailSubsection>
+                <DetailSubsection title="입찰제한정보">
+                  <div className="lot-detail-chip-row">
+                    {restrictionTags.length > 0 ? restrictionTags.map((tag) => (
+                      <span key={tag} className="lot-detail-chip gray">{tag}</span>
+                    )) : <span className="muted">-</span>}
+                  </div>
+                </DetailSubsection>
+                <DetailSubsection title="제출서류">
+                  <table className="lot-detail-table lot-detail-mobile-table">
+                    <thead>
+                      <tr>
+                        <th>구분</th>
+                        <th>서류명</th>
+                        <th>제출기한</th>
+                        <th>제출방법</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td colSpan={4}>조회된 결과가 없습니다.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  {appraisalUrl && (
+                    <div className="lot-detail-meta-footer">
+                      <a className="lot-detail-doc-link" href={appraisalUrl} target="_blank" rel="noreferrer">
+                        <FileText size={16} /> 감정평가서
+                      </a>
+                    </div>
+                  )}
+                </DetailSubsection>
+                <DetailSubsection title="입찰일정및장소">
+                  <div className="lot-detail-field-grid">
+                    <div className="lot-detail-field">
+                      <strong>입찰기간</strong>
+                      <span>{lot.starts || "-"} ~ {lot.ends || "-"}</span>
+                    </div>
+                    <div className="lot-detail-field">
+                      <strong>개찰일시</strong>
+                      <span>{lot.ends || "-"}</span>
+                    </div>
+                    <div className="lot-detail-field">
+                      <strong>개찰장소</strong>
+                      <span>온비드 전자입찰</span>
+                    </div>
+                    <div className="lot-detail-field">
+                      <strong>입찰상태</strong>
+                      <span>{statusLabel}</span>
+                    </div>
+                  </div>
+                </DetailSubsection>
+                <DetailSubsection title="납부기한안내">
+                  <div className="lot-detail-field-grid">
+                    <div className="lot-detail-field">
+                      <strong>배분요구종기</strong>
+                      <span>{lot.distributionDue || detailItem.dtbtRqrEdtmCont || "-"}</span>
+                    </div>
+                    <div className="lot-detail-field lot-detail-field-span">
+                      <strong>안내</strong>
+                      <span>낙찰 후 대금 납부 기한·계좌는 온비드 입찰결과 및 공고문에서 최종 확인하세요.</span>
+                    </div>
+                  </div>
+                </DetailSubsection>
+                <DetailSubsection title="이전입찰내역">
+                  <p className="muted">유찰 {lot.failedCount ?? 0}회</p>
+                  <table className="lot-detail-table lot-detail-mobile-table">
+                    <thead>
+                      <tr>
+                        <th>회차</th>
+                        <th>최저입찰가</th>
+                        <th>결과</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td colSpan={3}>조회된 결과가 없습니다.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </DetailSubsection>
+              </div>
+            )}
           </DetailTabSection>
 
+          {!isMobileView && (
+            <>
           <DetailTabSection id="bid-method" title="입찰방법" sectionRefs={sectionRefs}>
             <div className="lot-detail-chip-row">
               {capabilityTags.length > 0 ? capabilityTags.map((tag) => (
@@ -2383,17 +2718,26 @@ function LotDetailPanel({
               </tbody>
             </table>
           </DetailTabSection>
+            </>
+          )}
 
-          <DetailTabSection id="market" title="인근시세및낙찰사례" sectionRefs={sectionRefs}>
+          <DetailTabSection id="market" title={isMobileView ? "인근시세" : "인근시세및낙찰사례"} sectionRefs={sectionRefs}>
             <div className="lot-detail-section">
               <h4>인근 낙찰 물건</h4>
-              <p className="muted">최근 6개월 간 동일 지역·용도 기준 낙찰 물건이 없습니다.</p>
+              <p className="muted">{pageMetaLoading ? "불러오는 중" : "최근 6개월 간 동일 지역·용도 기준 낙찰 물건이 없습니다."}</p>
             </div>
+            {isMobileView && (
+              <DetailSubsection title="인근낙찰통계">
+                <p className="muted">{pageMetaLoading ? "불러오는 중" : "최근 6개월 간 동일 지역·용도 기준 낙찰 통계가 없습니다."}</p>
+              </DetailSubsection>
+            )}
           </DetailTabSection>
 
+          {!isMobileView && (
           <DetailTabSection id="market-stats" title="인근낙찰통계" sectionRefs={sectionRefs}>
             <p className="muted">최근 6개월 간 동일 지역·용도 기준 낙찰 통계가 없습니다.</p>
           </DetailTabSection>
+          )}
         </div>
       </section>
 

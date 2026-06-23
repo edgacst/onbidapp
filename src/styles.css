@@ -3020,6 +3020,22 @@ a {
   margin-bottom: 10px;
 }
 
+.lot-detail-hero-agency {
+  display: none;
+}
+
+.lot-detail-subsection h4 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #1a2430;
+}
+
+.lot-detail-nested-tabs {
+  display: grid;
+  gap: 0;
+}
+
 .lot-detail-meta-card ul {
   margin: 0;
   padding: 0;
@@ -5099,6 +5115,58 @@ a {
     flex: 1;
     overflow-wrap: anywhere;
     word-break: keep-all;
+  }
+
+  .lot-detail-hero-agency {
+    display: block;
+    margin: 0 14px 12px;
+    padding: 12px 14px;
+    background: #f7f9fc;
+    border-radius: 10px;
+    border: 1px solid #e8edf2;
+  }
+
+  .lot-detail-hero-agency ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 8px;
+  }
+
+  .lot-detail-hero-agency li {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 8px;
+    font-size: 13px;
+    align-items: start;
+  }
+
+  .lot-detail-hero-agency strong {
+    color: #667788;
+    font-weight: 700;
+  }
+
+  .lot-detail-hero-agency span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+  }
+
+  .lot-detail-tab-section[data-tab-id="bid-info"] .lot-detail-meta-card--inline {
+    display: none;
+  }
+
+  .lot-detail-subsection {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #edf1f4;
+  }
+
+  .lot-detail-nested-tabs .lot-detail-subsection:first-child {
+    margin-top: 8px;
+    padding-top: 0;
+    border-top: 0;
   }
 
   .lot-detail-panel--page,
