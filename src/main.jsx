@@ -1206,6 +1206,9 @@ function formatHeroAreaLine(lot, usePyeong) {
   return parts.join(", ") || "-";
 }
 
+function dedupePhotos(photos) {
+  return [...new Set(photos.filter(Boolean))];
+}
 
 function AuctionImage({ src, fallbackSrc = "", alt, className = "", showEmptyLabel = true }) {
   const sources = [src, fallbackSrc].filter(Boolean).filter((url, index, urls) => urls.indexOf(url) === index);
