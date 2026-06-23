@@ -1190,9 +1190,22 @@ async function resolveLotPhotosForDisplay(lot, detail) {
   return fromDetail.length ? fromDetail : (thumbnail ? [thumbnail] : []);
 }
 
-function dedupePhotos(photos) {
-  return [...new Set(photos.filter(Boolean))];
+function pickUsageTag(lot) {
+  const candidates = [
+    lot?.raw?.cltrUsgMclsCtgrNm,
+    lot?.category,
+    lot?.subCategory,
+  ];
+  return candidates.find((tag) => tag && !["부동산", "토지", "임야"].includes(tag)) || "용도 확인";
 }
+
+function formatHeroAreaLine(lot, usePyeong) {
+  const parts = [];
+  if (lot.landArea) parts.push(`토지 ${formatAreaMetric(lot.landArea, usePyeong, "")}`);
+  if (lot.buildingArea) parts.push(`건물 ${formatAreaMetric(lot.buildingArea, usePyeong, "")}`);
+  return parts.join(", ") || "-";
+}
+
 
 function AuctionImage({ src, fallbackSrc = "", alt, className = "", showEmptyLabel = true }) {
   const sources = [src, fallbackSrc].filter(Boolean).filter((url, index, urls) => urls.indexOf(url) === index);
@@ -1456,7 +1469,8 @@ function LotDetailPanel({
   const currentPhoto = photoFallbacks[photoIndex] || displayPhotos[photoIndex] || "";
   const propertyTag = raw.prptDivNm || lot.tags[0] || "공매";
   const dispositionTag = raw.dspsMthodNm || lot.tags[1] || "매각";
-  const usageTag = lot.subCategory || lot.category || "용도 확인";
+  const usageTag = pickUsageTag(lot);
+  const heroAreaLine = formatHeroAreaLine(lot, usePyeong);
   const roundLeft = String(raw.pbctNsq || lot.round || "-").padStart(3, "0");
   const roundRight = String(lot.conditionNo || raw.pbctCdtnNo || "-").slice(-3).padStart(3, "0");
   const areaRows = buildAreaRows(lot, detail);
@@ -1536,6 +1550,33 @@ function LotDetailPanel({
       )}
 
       <div className="lot-detail-hero">
+        <div className="lot-detail-hero-head">
+          <div className="lot-detail-tags">
+            <span className="lot-detail-tag green">{propertyTag}</span>
+            <span className="lot-detail-tag blue">{dispositionTag}</span>
+            <span className="lot-detail-tag purple">{usageTag}</span>
+          </div>
+
+          <div className="lot-detail-title-row">
+            <div>
+              <p className="lot-detail-id">{lot.id}</p>
+              <h2>{lot.title}</h2>
+            </div>
+            <div className="lot-detail-title-actions">
+              <button type="button" className="icon-button" aria-label="관심 물건 저장" onClick={onToggleSaved}>
+                <Heart size={19} fill={isSaved ? "currentColor" : "none"} />
+              </button>
+            </div>
+          </div>
+
+          <div className="lot-detail-quick-actions">
+            <a href={links?.kakao} target="_blank" rel="noreferrer">상권분석</a>
+            <a href={onbidUrl} target="_blank" rel="noreferrer" onClick={(event) => openExternalUrl(onbidUrl, event)}>등기열람하기</a>
+            <a href={links?.kakao} target="_blank" rel="noreferrer">지도</a>
+            <a className="primary" href={onbidUrl} target="_blank" rel="noreferrer" onClick={(event) => openExternalUrl(onbidUrl, event)}>공고보기</a>
+          </div>
+        </div>
+
         <div className="lot-detail-hero-media">
           <div className="lot-detail-media-stage">
             {galleryLoading && photoCount === 0 && mediaMode === "photo" && (
@@ -1581,54 +1622,46 @@ function LotDetailPanel({
           )}
         </div>
 
-        <div className="lot-detail-hero-info">
-          <div className="lot-detail-tags">
-            <span className="lot-detail-tag green">{propertyTag}</span>
-            <span className="lot-detail-tag blue">{dispositionTag}</span>
-            <span className="lot-detail-tag purple">{usageTag}</span>
-          </div>
-
-          <div className="lot-detail-title-row">
-            <div>
-              <p className="lot-detail-id">{lot.id}</p>
-              <h2>{lot.title}</h2>
+        <div className="lot-detail-hero-body">
+          <div className="lot-detail-hero-summary">
+            <div className="lot-detail-hero-summary-item">
+              <span>감정평가금액(원)</span>
+              <strong>{formatFullMoney(lot.appraised)}</strong>
             </div>
-            <div className="lot-detail-title-actions">
-              <button type="button" className="icon-button" aria-label="관심 물건 저장" onClick={onToggleSaved}>
-                <Heart size={19} fill={isSaved ? "currentColor" : "none"} />
-              </button>
+            <div className="lot-detail-hero-summary-item highlight">
+              <span>공매예정가격(원)</span>
+              <strong>{formatFullMoney(lot.minimum)}</strong>
             </div>
-          </div>
-
-          <div className="lot-detail-quick-actions">
-            <a href={links?.kakao} target="_blank" rel="noreferrer">상권분석</a>
-            <a href={onbidUrl} target="_blank" rel="noreferrer" onClick={(event) => openExternalUrl(onbidUrl, event)}>등기열람하기</a>
-            <a href={links?.kakao} target="_blank" rel="noreferrer">지도</a>
-            <a className="primary" href={onbidUrl} target="_blank" rel="noreferrer" onClick={(event) => openExternalUrl(onbidUrl, event)}>공고보기</a>
-          </div>
-
-          <div className="lot-detail-spec-grid">
-            <div className="lot-detail-spec-item">
-              <span>물건종류</span>
+            <div className="lot-detail-hero-summary-item">
+              <span>재산유형</span>
               <strong>{propertyTag}</strong>
             </div>
-            <div className="lot-detail-spec-item span-2">
+            <div className="lot-detail-hero-summary-item">
               <span>
                 면적
                 <button type="button" className={`lot-detail-unit-toggle ${usePyeong ? "active" : ""}`} onClick={() => setUsePyeong((value) => !value)}>평</button>
               </span>
-              <strong>
-                {lot.landArea ? `토지 ${formatAreaMetric(lot.landArea, usePyeong, "")}` : ""}
-                {lot.landArea && lot.buildingArea ? ", " : ""}
-                {lot.buildingArea ? `건물 ${formatAreaMetric(lot.buildingArea, usePyeong, "")}` : ""}
-                {!lot.landArea && !lot.buildingArea ? "-" : ""}
-              </strong>
+              <strong>{heroAreaLine}</strong>
+            </div>
+          </div>
+
+          <div className="lot-detail-spec-grid">
+            <div className="lot-detail-spec-item mobile-dup">
+              <span>물건종류</span>
+              <strong>{propertyTag}</strong>
+            </div>
+            <div className="lot-detail-spec-item span-2 mobile-dup">
+              <span>
+                면적
+                <button type="button" className={`lot-detail-unit-toggle ${usePyeong ? "active" : ""}`} onClick={() => setUsePyeong((value) => !value)}>평</button>
+              </span>
+              <strong>{heroAreaLine}</strong>
             </div>
             <div className="lot-detail-spec-item span-2">
               <span>입찰방식</span>
               <strong>{bidStyle}</strong>
             </div>
-            <div className="lot-detail-spec-item">
+            <div className="lot-detail-spec-item mobile-dup">
               <span>감정평가금액(원)</span>
               <strong>{formatFullMoney(lot.appraised)}</strong>
             </div>
@@ -1647,7 +1680,7 @@ function LotDetailPanel({
               <span>회차</span>
               <strong>{roundLeft} / {roundRight}</strong>
             </div>
-            <div className="lot-detail-spec-item highlight">
+            <div className="lot-detail-spec-item highlight mobile-dup">
               <span>최저입찰가(원)</span>
               <strong>{formatFullMoney(lot.minimum)}</strong>
             </div>
