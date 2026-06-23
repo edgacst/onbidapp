@@ -1665,12 +1665,30 @@ function LotDetailPanel({
     const sentinel = tabsSentinelRef.current;
     if (!sentinel) return undefined;
 
+    const mobileMq = window.matchMedia("(max-width: 760px)");
+    const syncPinned = (entry) => {
+      if (mobileMq.matches) {
+        setTabsPinned(false);
+        return;
+      }
+      setTabsPinned(!entry.isIntersecting);
+    };
+
     const observer = new IntersectionObserver(
-      ([entry]) => setTabsPinned(!entry.isIntersecting),
+      ([entry]) => syncPinned(entry),
       { root: null, threshold: 0, rootMargin: "0px" },
     );
     observer.observe(sentinel);
-    return () => observer.disconnect();
+
+    const onMobileChange = () => {
+      if (mobileMq.matches) setTabsPinned(false);
+    };
+    mobileMq.addEventListener("change", onMobileChange);
+
+    return () => {
+      observer.disconnect();
+      mobileMq.removeEventListener("change", onMobileChange);
+    };
   }, [lot?.id]);
 
   useEffect(() => {

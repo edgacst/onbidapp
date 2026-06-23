@@ -21,11 +21,7 @@ export default defineConfig(({ mode }) => {
             host: ngrokHost,
             clientPort: 443,
           }
-        : {
-            host: "localhost",
-            port: 5173,
-            clientPort: 5173,
-          },
+        : undefined,
       proxy: {
         "/onbid-api": {
           target: "https://apis.data.go.kr",
