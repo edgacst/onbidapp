@@ -852,6 +852,74 @@ function extractOnbidAppraisalRows(html) {
   return rows;
 }
 
+function splitDetailCont(value) {
+  if (!value) return [];
+  return String(value)
+    .split(/<br\s*\/?>|\r?\n|(?:^|\s)[-–—]\s+/i)
+    .map((part) => cleanOnbidText(part))
+    .filter(Boolean);
+}
+
+function buildPageMetaFromDetailItem(item) {
+  if (!item || !Object.keys(item).length) return null;
+
+  const usageRows = [];
+  if (item.locVntyPscdCont) {
+    usageRows.push({ label: "위치 및 주위환경", value: cleanOnbidText(item.locVntyPscdCont) });
+  }
+  if (item.utlzPscdCont) {
+    usageRows.push({ label: "이용상태", value: cleanOnbidText(item.utlzPscdCont) });
+  }
+  if (item.cltrEtcCont) {
+    usageRows.push({ label: "기타사항", value: cleanOnbidText(item.cltrEtcCont) });
+  }
+
+  const deliveryRows = [];
+  if (item.evcRsbyTrgtCont) {
+    deliveryRows.push({ label: "인도/인수 책임", value: cleanOnbidText(item.evcRsbyTrgtCont) });
+  }
+  if (item.pbctTdps) {
+    deliveryRows.push({ label: "공매세부", value: cleanOnbidText(item.pbctTdps) });
+  }
+  if (item.pbctEspc) {
+    deliveryRows.push({ label: "공매특이사항", value: cleanOnbidText(item.pbctEspc) });
+  }
+
+  const seizedCautionItems = splitDetailCont(item.pytnMtrsCont);
+  const seizedMainPoints = item.dsplVldCont
+    ? [cleanOnbidText(item.dsplVldCont), "유의사항"]
+    : undefined;
+
+  return {
+    noticeDate: formatOnbidDate(item.pbancDt || item.pbctBegnDt),
+    firstNoticeDate: formatOnbidDate(item.frstPbancDt || item.frstOpbdDt),
+    usageRows: usageRows.length ? usageRows : undefined,
+    deliveryRows: deliveryRows.length ? deliveryRows : undefined,
+    seizedMainPoints,
+    seizedCautionItems: seizedCautionItems.length ? seizedCautionItems : undefined,
+  };
+}
+
+function mergePageMeta(apiMeta, htmlMeta) {
+  if (!apiMeta && !htmlMeta) return null;
+  if (!apiMeta) return htmlMeta;
+  if (!htmlMeta) return apiMeta;
+
+  return {
+    noticeDate: apiMeta.noticeDate || htmlMeta.noticeDate,
+    firstNoticeDate: apiMeta.firstNoticeDate || htmlMeta.firstNoticeDate,
+    bidMethods: htmlMeta.bidMethods?.length ? htmlMeta.bidMethods : apiMeta.bidMethods,
+    bidRestrictions: htmlMeta.bidRestrictions?.length ? htmlMeta.bidRestrictions : apiMeta.bidRestrictions,
+    appraisalUrl: htmlMeta.appraisalUrl || apiMeta.appraisalUrl,
+    usageRows: apiMeta.usageRows?.length ? apiMeta.usageRows : htmlMeta.usageRows,
+    appraisalRows: htmlMeta.appraisalRows?.length ? htmlMeta.appraisalRows : apiMeta.appraisalRows,
+    deliveryRows: apiMeta.deliveryRows?.length ? apiMeta.deliveryRows : htmlMeta.deliveryRows,
+    seizedMainPoints: apiMeta.seizedMainPoints?.length ? apiMeta.seizedMainPoints : htmlMeta.seizedMainPoints,
+    seizedCautionItems: apiMeta.seizedCautionItems?.length ? apiMeta.seizedCautionItems : htmlMeta.seizedCautionItems,
+    areaNoteItems: htmlMeta.areaNoteItems?.length ? htmlMeta.areaNoteItems : apiMeta.areaNoteItems,
+  };
+}
+
 function buildUsageRows(pageMeta, lot) {
   if (pageMeta?.usageRows?.length) return pageMeta.usageRows;
   return [
@@ -941,21 +1009,31 @@ const onbidPageMetaCache = new Map();
 
 async function fetchOnbidPageMeta(lot, detail = null) {
   if (!lot?.id) return null;
-  const cacheKey = `meta-v2:${lot.id}:${lot.conditionNo || ""}:${detail?.item?.onbidPbancNo || lot.noticeNo || ""}`;
+  const cacheKey = `meta-v3:${lot.id}:${lot.conditionNo || ""}:${detail?.item?.onbidPbancNo || lot.noticeNo || ""}`;
   if (onbidPageMetaCache.has(cacheKey)) return onbidPageMetaCache.get(cacheKey);
 
+  const apiMeta = buildPageMetaFromDetailItem(detail?.item);
+
   const url = onbidDetailPageProxyUrl(lot, detail);
-  if (!url) return null;
+  if (!url) {
+    if (apiMeta) onbidPageMetaCache.set(cacheKey, apiMeta);
+    return apiMeta;
+  }
 
   try {
     const response = await apiFetch(url);
     const html = await response.text();
-    if (!response.ok) return null;
-    const parsed = parseOnbidDetailHtml(html);
-    if (parsed) onbidPageMetaCache.set(cacheKey, parsed);
-    return parsed;
+    if (!response.ok) {
+      if (apiMeta) onbidPageMetaCache.set(cacheKey, apiMeta);
+      return apiMeta;
+    }
+    const htmlMeta = parseOnbidDetailHtml(html);
+    const merged = mergePageMeta(apiMeta, htmlMeta);
+    if (merged) onbidPageMetaCache.set(cacheKey, merged);
+    return merged;
   } catch {
-    return null;
+    if (apiMeta) onbidPageMetaCache.set(cacheKey, apiMeta);
+    return apiMeta;
   }
 }
 
@@ -1180,8 +1258,16 @@ function resolveLotPhotos(lot, detail) {
 async function resolveLotPhotosForDisplay(lot, detail) {
   const fromDetail = resolveLotPhotos(lot, detail);
   const thumbnail = extractPhotoUrl(lot?.thumbnail);
+  const hasApiPhotos = Boolean(detail?.item?.potoUrlList && fromDetail.length);
 
-  if (fromDetail.length > 1) return [...new Set(fromDetail)];
+  if (hasApiPhotos) {
+    const merged = thumbnail && !fromDetail.includes(thumbnail)
+      ? [thumbnail, ...fromDetail]
+      : fromDetail;
+    return dedupePhotos(merged);
+  }
+
+  if (fromDetail.length > 1) return dedupePhotos(fromDetail);
 
   const fromAttachment = thumbnail ? await probeGalleryFromThumbnail(thumbnail) : [];
   const merged = [...new Set([thumbnail, ...fromAttachment, ...fromDetail].filter(Boolean))];
@@ -2362,7 +2448,7 @@ async function fetchOnbidCount(filters, statusCode = "") {
 async function fetchOnbidDetail(filters, lot) {
   if (!lot?.id) return null;
   const assetType = lot.assetType || filters.assetType;
-  const cacheKey = `${assetType}:${lot.id}:${lot.conditionNo || ""}`;
+  const cacheKey = `${assetType}:${lot.id}:${lot.conditionNo || ""}:${lot.onbidNo || ""}:${lot.pbctNo || ""}`;
   if (detailResponseCache.has(cacheKey)) {
     return detailResponseCache.get(cacheKey);
   }
@@ -2370,9 +2456,14 @@ async function fetchOnbidDetail(filters, lot) {
   const detailPath = detailPathsByAssetType[assetType] || ONBID_DETAIL_PATH;
   const params = new URLSearchParams({
     resultType: "json",
+    pageNo: "1",
+    numOfRows: "1",
     cltrMngNo: lot.id,
   });
   if (lot.conditionNo) params.set("pbctCdtnNo", String(lot.conditionNo));
+  if (lot.onbidNo) params.set("onbidCltrno", String(lot.onbidNo));
+  if (lot.noticeNo) params.set("onbidPbancNo", String(lot.noticeNo));
+  if (lot.pbctNo) params.set("pbctNo", String(lot.pbctNo));
 
   const response = await apiFetch(`${API_BASE}${detailPath}?${params.toString()}`);
   const text = await response.text();
