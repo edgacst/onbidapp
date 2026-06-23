@@ -314,6 +314,12 @@ function formatOnbidDate(value) {
   return ymd;
 }
 
+function scrollPageToTop() {
+  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}
+
 function formatYmd(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -2483,6 +2489,11 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (view !== "detail" || !selectedId) return;
+    scrollPageToTop();
+  }, [view, selectedId]);
+
+  useEffect(() => {
     if (!selected || data.sample) {
       setDetail(null);
       setDetailError("");
@@ -2682,6 +2693,7 @@ function App() {
     setSelectedId(id);
     pushAppHistory("detail", id);
     setView("detail");
+    scrollPageToTop();
   }
 
   async function runQuickSearch(rawKeyword = quickKeyword) {
