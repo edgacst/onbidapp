@@ -755,7 +755,7 @@ function buildSeizedMainPoints(pageMeta) {
   return DEFAULT_SEIZED_MAIN_POINTS;
 }
 
-function buildSeizedCautionItems(pageMeta, areaRows, usageRows, detailItem = null) {
+function buildSeizedCautionItems(pageMeta, detailItem = null) {
   const fromApi = splitDetailCont(detailItem?.pytnMtrsCont);
   const fromHtml = pageMeta?.seizedCautionItems || [];
   const items = [];
@@ -774,18 +774,6 @@ function buildSeizedCautionItems(pageMeta, areaRows, usageRows, detailItem = nul
   } else {
     pushItem(DEFAULT_DELIVERY_CAUTION, true);
   }
-
-  const areaNotes = pageMeta?.areaNoteItems || [];
-  areaNotes.forEach((text) => pushItem(text));
-  areaRows.forEach((row) => {
-    if (row.note && row.note !== "-") {
-      const prefix = row.usage && row.usage !== "-" ? `${row.usage}: ` : "";
-      pushItem(`${prefix}${row.note}`);
-    }
-  });
-
-  const etc = usageRows.find((row) => /기타/.test(row.label))?.value;
-  if (etc && etc !== "-") pushItem(etc);
 
   return items;
 }
@@ -978,21 +966,17 @@ function mergePageMeta(apiMeta, htmlMeta) {
 
 function buildDeliveryRows(pageMeta, lot, detailItem = null) {
   const item = detailItem || {};
-  const rows = [];
-  const cautionLines = splitDetailCont(item.pytnMtrsCont);
-  const deliveryLine = cautionLines.find((text) => /인도|명도/.test(text));
-  if (deliveryLine) {
-    rows.push({ label: "인도/인수 책임", value: deliveryLine });
-  } else if (pageMeta?.deliveryRows?.length && !isThinDeliveryMeta(pageMeta.deliveryRows)) {
+  if (pageMeta?.deliveryRows?.length && !isThinDeliveryMeta(pageMeta.deliveryRows)) {
     return pageMeta.deliveryRows;
-  } else {
-    const responsibility = cleanOnbidText(item.evcRsbyTrgtCont)
-      || lot?.raw?.evcRsbyTrgtCont
-      || lot?.note?.replace(/^인도인수책임:\s*/, "")
-      || "";
-    if (responsibility) {
-      rows.push({ label: "인도/인수 책임", value: responsibility });
-    }
+  }
+
+  const rows = [];
+  const responsibility = cleanOnbidText(item.evcRsbyTrgtCont)
+    || lot?.raw?.evcRsbyTrgtCont
+    || lot?.note?.replace(/^인도인수책임:\s*/, "")
+    || "";
+  if (responsibility) {
+    rows.push({ label: "인도/인수 책임", value: responsibility });
   }
   if (item.pbctTdps) rows.push({ label: "공매세부", value: cleanOnbidText(item.pbctTdps) });
   if (item.pbctEspc) rows.push({ label: "공매특이사항", value: cleanOnbidText(item.pbctEspc) });
@@ -1046,14 +1030,10 @@ function buildAppraisalRows(pageMeta, lot, detail) {
 }
 
 function formatDeliveryNote(lot, detailItem = null) {
-  const cautionLines = splitDetailCont(detailItem?.pytnMtrsCont);
-  const fromCaution = cautionLines.find((text) => /인도|명도/.test(text));
-  if (fromCaution) return fromCaution;
+  const short = cleanOnbidText(detailItem?.evcRsbyTrgtCont || lot?.raw?.evcRsbyTrgtCont);
+  if (short) return short;
   const fromNote = lot?.note?.replace(/^인도인수책임:\s*/, "");
-  if (fromNote && fromNote.length > 12) return fromNote;
-  const fromRaw = cleanOnbidText(detailItem?.evcRsbyTrgtCont || lot?.raw?.evcRsbyTrgtCont);
-  if (fromRaw && fromRaw.length > 12) return fromRaw;
-  return fromRaw || fromNote || "-";
+  return fromNote || "-";
 }
 
 function parseOnbidDetailHtml(html) {
@@ -1723,7 +1703,7 @@ function LotDetailPanel({
   }));
   const deliveryRows = buildDeliveryRows(pageMeta, lot, detailItem);
   const seizedMainPoints = buildSeizedMainPoints(pageMeta);
-  const seizedCautionItems = buildSeizedCautionItems(pageMeta, areaRows, usageRows, detailItem);
+  const seizedCautionItems = buildSeizedCautionItems(pageMeta, detailItem);
   const deliveryNote = formatDeliveryNote(lot, detailItem);
   const leaseRows = buildLeaseRows(detail);
   const registryRows = buildRegistryRows(detail);
@@ -1900,24 +1880,9 @@ function LotDetailPanel({
           </div>
 
           <div className="lot-detail-spec-grid">
-            <div className="lot-detail-spec-item mobile-dup">
-              <span>물건종류</span>
-              <strong>{propertyTag}</strong>
-            </div>
-            <div className="lot-detail-spec-item span-2 mobile-dup">
-              <span>
-                면적
-                <button type="button" className={`lot-detail-unit-toggle ${usePyeong ? "active" : ""}`} onClick={() => setUsePyeong((value) => !value)}>평</button>
-              </span>
-              <strong>{heroAreaLine}</strong>
-            </div>
             <div className="lot-detail-spec-item span-2">
               <span>입찰방식</span>
               <strong>{bidStyle}</strong>
-            </div>
-            <div className="lot-detail-spec-item mobile-dup">
-              <span>감정평가금액(원)</span>
-              <strong>{formatFullMoney(lot.appraised)}</strong>
             </div>
             <div className="lot-detail-spec-item">
               <span>배분요구종기</span>
@@ -1933,10 +1898,6 @@ function LotDetailPanel({
             <div className="lot-detail-spec-item">
               <span>회차</span>
               <strong>{roundLeft} / {roundRight}</strong>
-            </div>
-            <div className="lot-detail-spec-item highlight mobile-dup">
-              <span>최저입찰가(원)</span>
-              <strong>{formatFullMoney(lot.minimum)}</strong>
             </div>
             <div className="lot-detail-spec-item">
               <span>최초공고일자</span>
@@ -2118,14 +2079,15 @@ function LotDetailPanel({
                   {deliveryRows.map((row) => (
                     <div key={row.label} className="lot-detail-delivery-row">
                       <span className="lot-detail-delivery-label">{row.label}</span>
-                      <span className={`lot-detail-delivery-value ${/인도|명도/.test(row.value) ? "lot-detail-seized-blink" : ""}`}>{row.value}</span>
+                      <span className="lot-detail-delivery-value">{row.value}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {pageMetaLoading && <p className="muted">온비드 상세 정보를 불러오는 중입니다.</p>}
-              {detailLoading && <p className="muted">상세 API 조회 중입니다.</p>}
+              {pageMetaLoading && detailLoading && <p className="muted">상세 정보를 불러오는 중입니다.</p>}
+              {pageMetaLoading && !detailLoading && <p className="muted">온비드 상세 정보를 불러오는 중입니다.</p>}
+              {!pageMetaLoading && detailLoading && <p className="muted">상세 API 조회 중입니다.</p>}
               {detailError && !detail?.item?.cltrMngNo && <p className="muted">상세 API 권한이 없어 온비드 원문 기준으로 표시 중입니다.</p>}
           </section>
 
@@ -2179,7 +2141,7 @@ function LotDetailPanel({
                 </div>
                 <div className="lot-detail-field">
                   <strong>인도인수</strong>
-                  <span className={/인도|명도/.test(deliveryNote) ? "lot-detail-seized-blink" : ""}>{deliveryNote}</span>
+                  <span>{deliveryNote}</span>
                 </div>
               </div>
 
@@ -2270,24 +2232,6 @@ function LotDetailPanel({
             <h3 id="lot-detail-tab-bid"><CheckCircle2 size={18} /> 입찰정보</h3>
               <div className="lot-detail-field-grid">
                 <div className="lot-detail-field">
-                  <strong>입찰방식</strong>
-                  <span>{bidStyle}</span>
-                </div>
-                <div className="lot-detail-field lot-detail-field-span">
-                  <strong>입찰방법</strong>
-                  <span className="lot-detail-chip-row">
-                    {capabilityTags.length > 0 ? capabilityTags.map((tag) => (
-                      <span key={tag} className="lot-detail-chip blue">{tag}</span>
-                    )) : "-"}
-                  </span>
-                </div>
-                <div className="lot-detail-field lot-detail-field-span">
-                  <strong>입찰제한정보</strong>
-                  <span className="lot-detail-chip-row">
-                    {restrictionTags.map((tag) => <span key={tag} className="lot-detail-chip gray">{tag}</span>)}
-                  </span>
-                </div>
-                <div className="lot-detail-field">
                   <strong>물건관리번호</strong>
                   <span>{lot.id}</span>
                 </div>
@@ -2298,26 +2242,6 @@ function LotDetailPanel({
                 <div className="lot-detail-field">
                   <strong>온비드물건번호</strong>
                   <span>{lot.onbidNo || detailItem.onbidCltrno || "-"}</span>
-                </div>
-                <div className="lot-detail-field">
-                  <strong>입찰기간</strong>
-                  <span>{lot.starts || "-"} ~ {lot.ends || "-"}</span>
-                </div>
-                <div className="lot-detail-field">
-                  <strong>최저입찰가</strong>
-                  <span>{formatFullMoney(lot.minimum)}</span>
-                </div>
-                <div className="lot-detail-field">
-                  <strong>감정평가액</strong>
-                  <span>{formatFullMoney(lot.appraised)}</span>
-                </div>
-                <div className="lot-detail-field">
-                  <strong>배분요구종기</strong>
-                  <span>{lot.distributionDue || "-"}</span>
-                </div>
-                <div className="lot-detail-field">
-                  <strong>유찰횟수</strong>
-                  <span>{lot.failedCount ?? 0}회</span>
                 </div>
               </div>
           </section>
@@ -2332,10 +2256,8 @@ function LotDetailPanel({
             <h3 id="lot-detail-tab-market"><CheckCircle2 size={18} /> 인근 시세 및 낙찰 사례</h3>
             <div className="lot-detail-section">
               <h4>인근 낙찰 물건</h4>
-              <p className="muted">최근 6개월 간 해당물건과 동일한 지역, 용도를 기준으로 온비드를 통해 낙찰된 물건입니다.</p>
-              <p className="muted">조회된 결과가 없습니다.</p>
+              <p className="muted">최근 6개월 간 동일 지역·용도 기준 낙찰 물건이 없습니다. 상세 시세·낙찰 사례는 온비드 원문에서 확인할 수 있습니다.</p>
             </div>
-            <p className="lot-detail-section-note muted">상세 시세·낙찰 사례는 온비드 원문에서 추가로 확인할 수 있습니다.</p>
           </section>
         </div>
       </section>
