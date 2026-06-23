@@ -586,12 +586,24 @@ function mergeLotWithDetail(lot, detail) {
   const item = detail?.item;
   if (!item || !Object.keys(item).length) return lot;
   const raw = { ...(lot.raw || {}), ...item };
+  const appraised = parseMoney(item.apslEvlAmt ?? item.apslPrc) || lot.appraised;
+  const minimum = parseMoney(item.lowstBidPrcIndctCont ?? item.lowstBidPrc) || lot.minimum;
   return {
     ...lot,
     onbidNo: lot.onbidNo || item.onbidCltrno || "",
     conditionNo: lot.conditionNo || item.pbctCdtnNo || "",
     pbctNo: lot.pbctNo || item.pbctNo || "",
     noticeNo: lot.noticeNo || item.onbidPbancNo || "",
+    title: lot.title || item.onbidCltrNm || item.cltrNm || lot.title,
+    category: item.cltrUsgMclsCtgrNm || lot.category,
+    subCategory: item.cltrUsgSclsCtgrNm || lot.subCategory,
+    landArea: Number(item.landSqms ?? lot.landArea) || lot.landArea,
+    buildingArea: Number(item.bldSqms ?? lot.buildingArea) || lot.buildingArea,
+    appraised,
+    minimum,
+    firstNoticeDate: formatOnbidDate(item.frstPbancYmd || item.frstPbancDt || lot.firstNoticeDate) || lot.firstNoticeDate,
+    noticeDate: formatOnbidDate(item.pbancDt || item.pbctBegnDt || lot.noticeDate) || lot.noticeDate,
+    roadAddress: item.rdnmAdrs || item.cltrRadr || lot.roadAddress,
     raw,
   };
 }
@@ -852,6 +864,43 @@ function extractOnbidAppraisalRows(html) {
   return rows;
 }
 
+function formatSqmsUsage(clandCont) {
+  const parts = String(clandCont || "").split(">").map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0]}(${parts[1]})`;
+  return clandCont || "면적";
+}
+
+function isThinDeliveryMeta(rows) {
+  if (!rows?.length) return true;
+  return rows.every((row) => row.label === "인도/인수 책임" && String(row.value || "").trim().length < 12);
+}
+
+function photoIdentityKey(url) {
+  const text = String(url || "");
+  const match = text.match(/atchFileLstNo=(\d+).*?atchSn=(\d+)/);
+  return match ? `${match[1]}:${match[2]}` : text;
+}
+
+function preferOriginalPhotoUrl(url) {
+  const text = String(url || "");
+  if (!text) return "";
+  return text.replace("downloadImageKind=THNL_NM", "downloadImageKind=ORGNL_NM");
+}
+
+function dedupePhotoUrls(photos) {
+  const seen = new Set();
+  const out = [];
+  for (const photo of photos) {
+    const normalized = preferOriginalPhotoUrl(photo);
+    if (!normalized) continue;
+    const key = photoIdentityKey(normalized);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(normalized);
+  }
+  return out;
+}
+
 function splitDetailCont(value) {
   if (!value) return [];
   return String(value)
@@ -875,8 +924,9 @@ function buildPageMetaFromDetailItem(item) {
   }
 
   const deliveryRows = [];
-  if (item.evcRsbyTrgtCont) {
-    deliveryRows.push({ label: "인도/인수 책임", value: cleanOnbidText(item.evcRsbyTrgtCont) });
+  const deliveryText = cleanOnbidText(item.evcRsbyTrgtCont);
+  if (deliveryText && deliveryText.length >= 12) {
+    deliveryRows.push({ label: "인도/인수 책임", value: deliveryText });
   }
   if (item.pbctTdps) {
     deliveryRows.push({ label: "공매세부", value: cleanOnbidText(item.pbctTdps) });
@@ -892,7 +942,7 @@ function buildPageMetaFromDetailItem(item) {
 
   return {
     noticeDate: formatOnbidDate(item.pbancDt || item.pbctBegnDt),
-    firstNoticeDate: formatOnbidDate(item.frstPbancDt || item.frstOpbdDt),
+    firstNoticeDate: formatOnbidDate(item.frstPbancYmd || item.frstPbancDt || item.frstOpbdDt),
     usageRows: usageRows.length ? usageRows : undefined,
     deliveryRows: deliveryRows.length ? deliveryRows : undefined,
     seizedMainPoints,
@@ -913,7 +963,11 @@ function mergePageMeta(apiMeta, htmlMeta) {
     appraisalUrl: htmlMeta.appraisalUrl || apiMeta.appraisalUrl,
     usageRows: apiMeta.usageRows?.length ? apiMeta.usageRows : htmlMeta.usageRows,
     appraisalRows: htmlMeta.appraisalRows?.length ? htmlMeta.appraisalRows : apiMeta.appraisalRows,
-    deliveryRows: apiMeta.deliveryRows?.length ? apiMeta.deliveryRows : htmlMeta.deliveryRows,
+    deliveryRows: !isThinDeliveryMeta(apiMeta.deliveryRows) && apiMeta.deliveryRows?.length
+      ? apiMeta.deliveryRows
+      : htmlMeta.deliveryRows?.length
+        ? htmlMeta.deliveryRows
+        : apiMeta.deliveryRows,
     seizedMainPoints: apiMeta.seizedMainPoints?.length ? apiMeta.seizedMainPoints : htmlMeta.seizedMainPoints,
     seizedCautionItems: apiMeta.seizedCautionItems?.length ? apiMeta.seizedCautionItems : htmlMeta.seizedCautionItems,
     areaNoteItems: htmlMeta.areaNoteItems?.length ? htmlMeta.areaNoteItems : apiMeta.areaNoteItems,
@@ -934,13 +988,20 @@ function buildAppraisalRows(pageMeta, lot, detail) {
 
   const detailAppraisals = asArray(detail?.appraisals);
   if (detailAppraisals.length) {
-    return detailAppraisals.map((item) => ({
+    const rows = detailAppraisals.map((item) => ({
       agency: item.apslEvlOrgNm || item.apslEvlClgNm || item.orgNm || "-",
-      appraiser: item.apslEvlPsnNm || "-",
-      date: formatOnbidDate(item.apslEvlDt || item.apslDt) || "-",
+      appraiser: item.apslApprNm || item.apslEvlPsnNm || "-",
+      date: formatOnbidDate(item.apslEvlYmd || item.apslEvlDt || item.apslDt) || "-",
       amount: formatFullMoney(parseMoney(item.apslPrc ?? item.apslEvlAmt ?? item.apslAmt)),
       reportUrl: extractPhotoUrl(item.atchFileUrl || item.fileUrl || item.urlAdr || item.apslEvlFileUrl || ""),
     }));
+    const seen = new Set();
+    return rows.filter((row) => {
+      const key = `${row.agency}|${row.date}|${row.amount}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   if (lot?.appraised) {
@@ -1245,7 +1306,7 @@ function collectDetailPhotos(item) {
   const thumbnail = extractPhotoUrl(item.thnlImgUrlAdr || item.thnlImgUrl || item.urlAdr);
   if (thumbnail && !photos.includes(thumbnail)) photos.unshift(thumbnail);
 
-  return [...new Set(photos)];
+  return dedupePhotoUrls(photos);
 }
 
 function resolveLotPhotos(lot, detail) {
@@ -1261,13 +1322,13 @@ async function resolveLotPhotosForDisplay(lot, detail) {
   const hasApiPhotos = Boolean(detail?.item?.potoUrlList && fromDetail.length);
 
   if (hasApiPhotos) {
-    const merged = thumbnail && !fromDetail.includes(thumbnail)
-      ? [thumbnail, ...fromDetail]
+    const merged = thumbnail && !fromDetail.some((url) => photoIdentityKey(url) === photoIdentityKey(thumbnail))
+      ? [preferOriginalPhotoUrl(thumbnail), ...fromDetail]
       : fromDetail;
-    return dedupePhotos(merged);
+    return dedupePhotoUrls(merged);
   }
 
-  if (fromDetail.length > 1) return dedupePhotos(fromDetail);
+  if (fromDetail.length > 1) return dedupePhotoUrls(fromDetail);
 
   const fromAttachment = thumbnail ? await probeGalleryFromThumbnail(thumbnail) : [];
   const merged = [...new Set([thumbnail, ...fromAttachment, ...fromDetail].filter(Boolean))];
@@ -1405,10 +1466,17 @@ function formatAreaMetric(value, usePyeong = false, emptyText = "-") {
 
 function buildAreaRows(lot, detail) {
   const fromDetail = asArray(detail?.areas).map((entry) => ({
-    usage: entry.cltrUsgNm || entry.usgNm || entry.areaDivNm || entry.usgDivNm || "면적",
-    area: Number(entry.areaSqms ?? entry.sqms ?? entry.area ?? 0),
-    share: entry.alcCntnt || entry.shrCntnt || "-",
-    note: entry.rmrkCntnt || entry.rmrk || "-",
+    usage: entry.clandCont
+      ? formatSqmsUsage(entry.clandCont)
+      : entry.cltrUsgNm || entry.usgNm || entry.areaDivNm || entry.usgDivNm || "면적",
+    area: Number(
+      entry.areaSqms
+      ?? entry.sqms
+      ?? entry.area
+      ?? String(entry.sqmsCont || "").replace(/[^\d.]/g, ""),
+    ),
+    share: entry.pursAlcCont || entry.alcCntnt || entry.shrCntnt || "-",
+    note: entry.dtlCltrNm || entry.rmrkCntnt || entry.rmrk || "-",
   })).filter((row) => row.area > 0);
 
   if (fromDetail.length) return fromDetail;
@@ -1961,7 +2029,7 @@ function LotDetailPanel({
 
               {pageMetaLoading && <p className="muted">온비드 상세 정보를 불러오는 중입니다.</p>}
               {detailLoading && <p className="muted">상세 API 조회 중입니다.</p>}
-              {detailError && <p className="muted">상세 API 권한이 없어 온비드 원문 기준으로 표시 중입니다.</p>}
+              {detailError && !detail?.item?.cltrMngNo && <p className="muted">상세 API 권한이 없어 온비드 원문 기준으로 표시 중입니다.</p>}
           </section>
 
           <section
@@ -2270,8 +2338,20 @@ function normalizeDetail(payload) {
     item,
     photos,
     thumbnail: photos[0] || "",
-    appraisals: asArray(item?.apslEvlClgList?.item ?? item?.apslEvlClgList ?? item?.apslEvlList?.item),
-    areas: asArray(item?.areaDtlList?.item ?? item?.areaDtlList ?? item?.rlstAreaList?.item),
+    appraisals: asArray(
+      item?.apslEvlClgList?.item
+      ?? item?.apslEvlClgList
+      ?? item?.apslEvlList?.item
+      ?? item?.apslEvlList,
+    ),
+    areas: asArray(
+      item?.sqmsList?.item
+      ?? item?.sqmsList
+      ?? item?.areaDtlList?.item
+      ?? item?.areaDtlList
+      ?? item?.rlstAreaList?.item
+      ?? item?.rlstAreaList,
+    ),
   };
 }
 
