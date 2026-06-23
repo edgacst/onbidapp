@@ -8,7 +8,8 @@
     "build:phone": "node scripts/build-phone.mjs",
     "build:inner": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "start:phone": "node scripts/build.mjs && node scripts/phone-launch.mjs --port 3000 --server prod --keep-alive"
   },
   "dependencies": {
     "@vitejs/plugin-react": "5.1.1",

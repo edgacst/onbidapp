@@ -3090,6 +3090,10 @@ a {
     padding-bottom: calc(74px + env(safe-area-inset-bottom));
   }
 
+  .content-grid .detail-panel {
+    display: none;
+  }
+
   .sidebar {
     position: fixed;
     top: auto;

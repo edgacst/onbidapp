@@ -6,4 +6,4 @@ import { launchPhone } from "./phone-launch.mjs";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
 execFileSync("node", ["scripts/build.mjs"], { cwd: root, stdio: "inherit" });
-await launchPhone(["--port", "3000", "--server", "prod"]);
+await launchPhone(["--port", "3000", "--server", "prod", "--no-browser"]);

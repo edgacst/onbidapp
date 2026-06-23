@@ -11,7 +11,7 @@ function parseArgs(argv) {
     port: 5173,
     server: "dev",
     keepAlive: false,
-    openBrowser: true,
+    openBrowser: false,
     useTunnel: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -143,7 +143,7 @@ export async function launchPhone(argv = process.argv.slice(2)) {
   }
 
   if (options.openBrowser) openBrowser(localUrl);
-  console.log("\n폰 브라우저에 위 Wi-Fi 주소를 입력하세요.\n");
+  console.log("\n폰에서는 PC가 아니라 폰 브라우저(Chrome/Safari)에서 Wi-Fi 주소를 직접 입력하세요.\n");
 
   if (options.keepAlive) await new Promise(() => {});
 }
