@@ -1582,6 +1582,21 @@ function photoDisplayFallback(url) {
   return "";
 }
 
+function DetailTabSection({ id, title, children, sectionRefs }) {
+  return (
+    <section
+      id={`lot-detail-section-${id}`}
+      data-tab-id={id}
+      className="lot-detail-tab-section"
+      ref={(node) => { sectionRefs.current[id] = node; }}
+      aria-labelledby={`lot-detail-tab-${id}`}
+    >
+      <h3 id={`lot-detail-tab-${id}`}><CheckCircle2 size={18} /> {title}</h3>
+      {children}
+    </section>
+  );
+}
+
 function LotDetailPanel({
   lot,
   detail,
@@ -1611,14 +1626,25 @@ function LotDetailPanel({
   const [reviewChecks, setReviewChecks] = useState({});
   const reviewRef = useRef(null);
   const sectionRefs = useRef({});
+  const tabsSentinelRef = useRef(null);
+  const tabsBarRef = useRef(null);
   const scrollingToTab = useRef(false);
+  const [tabsPinned, setTabsPinned] = useState(false);
+  const [tabsBarHeight, setTabsBarHeight] = useState(0);
 
   const detailTabs = [
     ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
     { id: "spec", label: "세부정보" },
     { id: "seized", label: "압류재산정보" },
-    { id: "bid", label: "입찰정보" },
-    { id: "market", label: "인근 시세 및 낙찰 사례" },
+    { id: "bid-info", label: "입찰정보" },
+    { id: "bid-method", label: "입찰방법" },
+    { id: "bid-limit", label: "입찰제한정보" },
+    { id: "documents", label: "제출서류" },
+    { id: "bid-schedule", label: "입찰일정및장소" },
+    { id: "payment", label: "납부기한안내" },
+    { id: "prev-bids", label: "이전입찰내역" },
+    { id: "market", label: "인근시세및낙찰사례" },
+    { id: "market-stats", label: "인근낙찰통계" },
   ];
 
   useEffect(() => {
@@ -1631,8 +1657,30 @@ function LotDetailPanel({
     setActiveTab(showResult ? "result" : "spec");
     setReviewOpen(false);
     setReviewChecks({});
+    setTabsPinned(false);
     sectionRefs.current = {};
   }, [lot?.id, showResult]);
+
+  useEffect(() => {
+    const sentinel = tabsSentinelRef.current;
+    if (!sentinel) return undefined;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setTabsPinned(!entry.isIntersecting),
+      { root: null, threshold: 0, rootMargin: "0px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [lot?.id]);
+
+  useEffect(() => {
+    const bar = tabsBarRef.current;
+    if (!bar) return;
+    const update = () => setTabsBarHeight(bar.offsetHeight);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [detailTabs.length, tabsPinned]);
 
   function openBidReview() {
     setReviewOpen(true);
@@ -1673,12 +1721,12 @@ function LotDetailPanel({
         const tabId = hit?.target?.getAttribute("data-tab-id");
         if (tabId) setActiveTab(tabId);
       },
-      { root: null, rootMargin: "-56px 0px -55% 0px", threshold: [0, 0.15, 0.4, 0.7] },
+      { root: null, rootMargin: "-52px 0px -55% 0px", threshold: [0, 0.15, 0.4, 0.7] },
     );
 
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
-  }, [lot?.id, pageMetaLoading, detailLoading]);
+  }, [lot?.id, pageMetaLoading, detailLoading, detailTabs.length]);
 
   const displayPhotos = dedupePhotos(photos);
   const photoCount = displayPhotos.length;
@@ -1911,41 +1959,29 @@ function LotDetailPanel({
         </div>
       </div>
 
-      <section className="lot-detail-meta-card">
-        <ul>
-          <li><strong>공고기관</strong><span>{lot.agency || "-"}</span></li>
-          <li><strong>담당지점</strong><span>{deptLine || "온비드 원문 확인"}</span></li>
-          <li><strong>공매기관</strong><span>{lot.requestAgency || lot.agency || "-"}</span></li>
-          <li>
-            <strong>공고종류</strong>
-            <span className="lot-detail-inline-tag">{raw.pbancDivNm || raw.pbancTypeNm || "일반공고"}</span>
-          </li>
-          <li><strong>공고일자</strong><span>{noticeDate}</span></li>
-        </ul>
-        <ul>
-          <li className="lot-detail-meta-row-span">
-            <strong>입찰방법</strong>
-            <div className="lot-detail-chip-row">
-              {capabilityTags.length > 0 ? capabilityTags.map((tag) => (
-                <span key={tag} className="lot-detail-chip blue">{tag}</span>
-              )) : <span className="muted">{pageMetaLoading ? "불러오는 중" : "-"}</span>}
-            </div>
-          </li>
-          <li className="lot-detail-meta-row-span">
-            <strong>입찰제한정보</strong>
-            <div className="lot-detail-chip-row">
-              {restrictionTags.map((tag) => <span key={tag} className="lot-detail-chip gray">{tag}</span>)}
-            </div>
-          </li>
-        </ul>
-        {appraisalUrl && (
-          <div className="lot-detail-meta-footer">
-            <a className="lot-detail-doc-link" href={appraisalUrl} target="_blank" rel="noreferrer">
-              <FileText size={16} /> 감정평가서
-            </a>
+      <div ref={tabsSentinelRef} className="lot-detail-tabs-sentinel" aria-hidden="true" />
+      {tabsPinned && tabsBarHeight > 0 && (
+        <div className="lot-detail-tabs-spacer" style={{ height: tabsBarHeight }} aria-hidden="true" />
+      )}
+      <div className={`lot-detail-tabs-bar ${tabsPinned ? "is-pinned" : ""}`} ref={tabsBarRef}>
+        <div className="lot-detail-tabs-bar-inner">
+          <div className="lot-detail-tabs" role="tablist" aria-label="물건 상세 탭">
+            {detailTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                aria-controls={`lot-detail-section-${tab.id}`}
+                className={activeTab === tab.id ? "active" : ""}
+                onClick={() => goToDetailTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
-        )}
-      </section>
+        </div>
+      </div>
 
       {isSeized && (
         <div className="lot-detail-warning">
@@ -1955,31 +1991,8 @@ function LotDetailPanel({
       )}
 
       <section className="lot-detail-tabs-wrap">
-        <div className="lot-detail-tabs" role="tablist" aria-label="물건 상세 탭">
-          {detailTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              aria-controls={`lot-detail-section-${tab.id}`}
-              className={activeTab === tab.id ? "active" : ""}
-              onClick={() => goToDetailTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
         <div className="lot-detail-tab-panel" role="tabpanel">
-          <section
-            id="lot-detail-section-spec"
-            data-tab-id="spec"
-            className="lot-detail-tab-section"
-            ref={(node) => { sectionRefs.current.spec = node; }}
-            aria-labelledby="lot-detail-tab-spec"
-          >
-            <h3 id="lot-detail-tab-spec"><CheckCircle2 size={18} /> 세부정보</h3>
+          <DetailTabSection id="spec" title="세부정보" sectionRefs={sectionRefs}>
               <div className="lot-detail-section">
                 <h4>면적정보</h4>
                 <table className="lot-detail-table">
@@ -2089,16 +2102,9 @@ function LotDetailPanel({
               {pageMetaLoading && !detailLoading && <p className="muted">온비드 상세 정보를 불러오는 중입니다.</p>}
               {!pageMetaLoading && detailLoading && <p className="muted">상세 API 조회 중입니다.</p>}
               {detailError && !detail?.item?.cltrMngNo && <p className="muted">상세 API 권한이 없어 온비드 원문 기준으로 표시 중입니다.</p>}
-          </section>
+          </DetailTabSection>
 
-          <section
-            id="lot-detail-section-seized"
-            data-tab-id="seized"
-            className="lot-detail-tab-section"
-            ref={(node) => { sectionRefs.current.seized = node; }}
-            aria-labelledby="lot-detail-tab-seized"
-          >
-            <h3 id="lot-detail-tab-seized"><CheckCircle2 size={18} /> 압류재산정보</h3>
+          <DetailTabSection id="seized" title="압류재산정보" sectionRefs={sectionRefs}>
               {isSeized ? (
                 <div className="lot-detail-seized-card">
                   <div className="lot-detail-seized-card-head">
@@ -2220,45 +2226,156 @@ function LotDetailPanel({
                   </div>
                 </>
               )}
-          </section>
+          </DetailTabSection>
 
-          <section
-            id="lot-detail-section-bid"
-            data-tab-id="bid"
-            className="lot-detail-tab-section"
-            ref={(node) => { sectionRefs.current.bid = node; }}
-            aria-labelledby="lot-detail-tab-bid"
-          >
-            <h3 id="lot-detail-tab-bid"><CheckCircle2 size={18} /> 입찰정보</h3>
-              <div className="lot-detail-field-grid">
-                <div className="lot-detail-field">
-                  <strong>물건관리번호</strong>
-                  <span>{lot.id}</span>
-                </div>
-                <div className="lot-detail-field">
-                  <strong>공매번호</strong>
-                  <span>{lot.pbctNo || detailItem.pbctNo || "-"}</span>
-                </div>
-                <div className="lot-detail-field">
-                  <strong>온비드물건번호</strong>
-                  <span>{lot.onbidNo || detailItem.onbidCltrno || "-"}</span>
-                </div>
+          <DetailTabSection id="bid-info" title="입찰정보" sectionRefs={sectionRefs}>
+            <div className="lot-detail-meta-card lot-detail-meta-card--inline">
+              <ul>
+                <li><strong>공고기관</strong><span>{lot.agency || "-"}</span></li>
+                <li><strong>담당지점</strong><span>{deptLine || "온비드 원문 확인"}</span></li>
+                <li><strong>공매기관</strong><span>{lot.requestAgency || lot.agency || "-"}</span></li>
+                <li>
+                  <strong>공고종류</strong>
+                  <span className="lot-detail-inline-tag">{raw.pbancDivNm || raw.pbancTypeNm || "일반공고"}</span>
+                </li>
+                <li><strong>공고일자</strong><span>{noticeDate}</span></li>
+              </ul>
+            </div>
+            <div className="lot-detail-field-grid">
+              <div className="lot-detail-field">
+                <strong>물건관리번호</strong>
+                <span>{lot.id}</span>
               </div>
-          </section>
+              <div className="lot-detail-field">
+                <strong>공매번호</strong>
+                <span>{lot.pbctNo || detailItem.pbctNo || "-"}</span>
+              </div>
+              <div className="lot-detail-field">
+                <strong>온비드물건번호</strong>
+                <span>{lot.onbidNo || detailItem.onbidCltrno || "-"}</span>
+              </div>
+              <div className="lot-detail-field">
+                <strong>입찰방식</strong>
+                <span>{bidStyle}</span>
+              </div>
+              <div className="lot-detail-field">
+                <strong>입찰기간</strong>
+                <span>{lot.starts || "-"} ~ {lot.ends || "-"}</span>
+              </div>
+              <div className="lot-detail-field">
+                <strong>회차</strong>
+                <span>{roundLeft} / {roundRight}</span>
+              </div>
+              <div className="lot-detail-field">
+                <strong>유찰횟수</strong>
+                <span>{lot.failedCount ?? 0}회</span>
+              </div>
+            </div>
+          </DetailTabSection>
 
-          <section
-            id="lot-detail-section-market"
-            data-tab-id="market"
-            className="lot-detail-tab-section"
-            ref={(node) => { sectionRefs.current.market = node; }}
-            aria-labelledby="lot-detail-tab-market"
-          >
-            <h3 id="lot-detail-tab-market"><CheckCircle2 size={18} /> 인근 시세 및 낙찰 사례</h3>
+          <DetailTabSection id="bid-method" title="입찰방법" sectionRefs={sectionRefs}>
+            <div className="lot-detail-chip-row">
+              {capabilityTags.length > 0 ? capabilityTags.map((tag) => (
+                <span key={tag} className="lot-detail-chip blue">{tag}</span>
+              )) : <span className="muted">{pageMetaLoading ? "불러오는 중" : "-"}</span>}
+            </div>
+          </DetailTabSection>
+
+          <DetailTabSection id="bid-limit" title="입찰제한정보" sectionRefs={sectionRefs}>
+            <div className="lot-detail-chip-row">
+              {restrictionTags.length > 0 ? restrictionTags.map((tag) => (
+                <span key={tag} className="lot-detail-chip gray">{tag}</span>
+              )) : <span className="muted">-</span>}
+            </div>
+          </DetailTabSection>
+
+          <DetailTabSection id="documents" title="제출서류" sectionRefs={sectionRefs}>
+            <table className="lot-detail-table lot-detail-mobile-table">
+              <thead>
+                <tr>
+                  <th>구분</th>
+                  <th>서류명</th>
+                  <th>제출기한</th>
+                  <th>제출방법</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colSpan={4}>조회된 결과가 없습니다.</td>
+                </tr>
+              </tbody>
+            </table>
+            {appraisalUrl && (
+              <div className="lot-detail-meta-footer">
+                <a className="lot-detail-doc-link" href={appraisalUrl} target="_blank" rel="noreferrer">
+                  <FileText size={16} /> 감정평가서
+                </a>
+              </div>
+            )}
+          </DetailTabSection>
+
+          <DetailTabSection id="bid-schedule" title="입찰일정및장소" sectionRefs={sectionRefs}>
+            <div className="lot-detail-field-grid">
+              <div className="lot-detail-field">
+                <strong>입찰기간</strong>
+                <span>{lot.starts || "-"} ~ {lot.ends || "-"}</span>
+              </div>
+              <div className="lot-detail-field">
+                <strong>개찰일시</strong>
+                <span>{lot.ends || "-"}</span>
+              </div>
+              <div className="lot-detail-field">
+                <strong>개찰장소</strong>
+                <span>온비드 전자입찰</span>
+              </div>
+              <div className="lot-detail-field">
+                <strong>입찰상태</strong>
+                <span>{statusLabel}</span>
+              </div>
+            </div>
+          </DetailTabSection>
+
+          <DetailTabSection id="payment" title="납부기한안내" sectionRefs={sectionRefs}>
+            <div className="lot-detail-field-grid">
+              <div className="lot-detail-field">
+                <strong>배분요구종기</strong>
+                <span>{lot.distributionDue || detailItem.dtbtRqrEdtmCont || "-"}</span>
+              </div>
+              <div className="lot-detail-field lot-detail-field-span">
+                <strong>안내</strong>
+                <span>낙찰 후 대금 납부 기한·계좌는 온비드 입찰결과 및 공고문에서 최종 확인하세요.</span>
+              </div>
+            </div>
+          </DetailTabSection>
+
+          <DetailTabSection id="prev-bids" title="이전입찰내역" sectionRefs={sectionRefs}>
+            <p className="muted">유찰 {lot.failedCount ?? 0}회</p>
+            <table className="lot-detail-table lot-detail-mobile-table">
+              <thead>
+                <tr>
+                  <th>회차</th>
+                  <th>최저입찰가</th>
+                  <th>결과</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colSpan={3}>조회된 결과가 없습니다.</td>
+                </tr>
+              </tbody>
+            </table>
+          </DetailTabSection>
+
+          <DetailTabSection id="market" title="인근시세및낙찰사례" sectionRefs={sectionRefs}>
             <div className="lot-detail-section">
               <h4>인근 낙찰 물건</h4>
-              <p className="muted">최근 6개월 간 동일 지역·용도 기준 낙찰 물건이 없습니다. 상세 시세·낙찰 사례는 온비드 원문에서 확인할 수 있습니다.</p>
+              <p className="muted">최근 6개월 간 동일 지역·용도 기준 낙찰 물건이 없습니다.</p>
             </div>
-          </section>
+          </DetailTabSection>
+
+          <DetailTabSection id="market-stats" title="인근낙찰통계" sectionRefs={sectionRefs}>
+            <p className="muted">최근 6개월 간 동일 지역·용도 기준 낙찰 통계가 없습니다.</p>
+          </DetailTabSection>
         </div>
       </section>
 

@@ -2987,6 +2987,10 @@ a {
   gap: 8px;
 }
 
+.lot-detail-meta-card--inline {
+  margin-bottom: 10px;
+}
+
 .lot-detail-meta-card ul {
   margin: 0;
   padding: 0;
@@ -3180,37 +3184,77 @@ a {
 .lot-detail-tabs-wrap {
   border: 1px solid #dfe6eb;
   border-radius: 8px;
-  overflow: hidden;
   background: #fff;
+}
+
+.lot-detail-tabs-sentinel {
+  height: 1px;
+  margin: 0;
+}
+
+.lot-detail-tabs-spacer {
+  pointer-events: none;
+}
+
+.lot-detail-tabs-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  margin: 0 -12px 8px;
+  background: rgba(250, 251, 252, 0.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid #edf1f4;
+}
+
+.lot-detail-tabs-bar.is-pinned {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  box-shadow: 0 4px 18px rgba(21, 27, 35, 0.1);
+}
+
+.lot-detail-tabs-bar-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 12px;
 }
 
 .lot-detail-tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0;
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  border-bottom: 1px solid #edf1f4;
-  background: #fafbfc;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.lot-detail-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .lot-detail-tabs button {
-  min-height: 42px;
-  padding: 0 12px;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 11px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: #6a7884;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
+  white-space: nowrap;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
 .lot-detail-tab-section {
-  scroll-margin-top: 56px;
+  scroll-margin-top: 52px;
   padding-top: 4px;
 }
 
