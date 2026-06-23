@@ -2070,7 +2070,7 @@ function LotDetailPanel({
 
               <div className="lot-detail-section">
                 <h4>감정평가정보</h4>
-                <table className="lot-detail-table lot-detail-appraisal-table">
+                <table className="lot-detail-table lot-detail-appraisal-table lot-detail-mobile-table">
                   <thead>
                     <tr>
                       <th>감정평가기관</th>
@@ -2083,11 +2083,11 @@ function LotDetailPanel({
                   <tbody>
                     {appraisalRows.length > 0 ? appraisalRows.map((row, index) => (
                       <tr key={`${row.agency}-${row.date}-${index}`}>
-                        <td>{row.agency}</td>
-                        <td>{row.appraiser}</td>
-                        <td>{row.date}</td>
-                        <td className="lot-detail-appraisal-amount">{row.amount}</td>
-                        <td>
+                        <td data-label="감정평가기관">{row.agency}</td>
+                        <td data-label="감정평가사">{row.appraiser}</td>
+                        <td data-label="감정평가일">{row.date}</td>
+                        <td className="lot-detail-appraisal-amount" data-label="감정평가금액(원)">{row.amount}</td>
+                        <td data-label="감정평가서">
                           {row.reportUrl ? (
                             <a className="lot-detail-pdf-link" href={row.reportUrl} target="_blank" rel="noreferrer" aria-label="감정평가서 PDF">
                               <FileText size={18} />
