@@ -3283,6 +3283,32 @@ a {
   font-weight: 800;
 }
 
+.lot-detail-section-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.lot-detail-mobile-table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.lot-detail-mobile-table thead,
+.lot-detail-mobile-table tbody {
+  display: table;
+  width: 100%;
+  min-width: 640px;
+}
+
+.lot-detail-media-stage img[alt$="위치도"] {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #f6f8fa;
+}
+
 .lot-detail-kv-table th {
   width: 120px;
   background: #f6f8fa;

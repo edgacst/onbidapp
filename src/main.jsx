@@ -1497,6 +1497,52 @@ function formatAreaMetric(value, usePyeong = false, emptyText = "-") {
   return `${numeric.toLocaleString("ko-KR")}m²`;
 }
 
+function formatRegistryAmount(value) {
+  if (value == null || value === "") return "미표시";
+  const numeric = Number(value);
+  if (!numeric) return "미표시";
+  return formatFullMoney(numeric);
+}
+
+function formatOptionalMoney(value) {
+  if (value == null || value === "") return "-";
+  const numeric = Number(value);
+  if (!numeric) return "-";
+  return formatFullMoney(numeric);
+}
+
+function pickLocationMapUrl(item = {}) {
+  const candidates = [
+  item.lmapUrlAdrList,
+  item.lrmUrlAdrList,
+  ]
+    .flatMap((value) => String(value || "").split("|"))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return candidates[0] || "";
+}
+
+function buildLeaseRows(detail) {
+  return asArray(detail?.leaseInfos).map((row) => ({
+    category: row.irstDivNm || row.leasDivNm || "-",
+    name: row.cltrInprNm || "-",
+    deposit: formatOptionalMoney(row.bidGrteeAmt),
+    rent: formatOptionalMoney(row.mthrAmt),
+    convertedDeposit: formatOptionalMoney(row.convGrteeAmt),
+    confirmDate: formatOnbidDate(row.cfmtnYmd) || "-",
+    moveInDate: formatOnbidDate(row.mvinYmd) || "-",
+  }));
+}
+
+function buildRegistryRows(detail) {
+  return asArray(detail?.registryInfos).map((row) => ({
+    kind: row.irstDivNm || row.rgtKndNm || "-",
+    holder: row.cltrInprNm || row.rgtNm || "-",
+    date: formatOnbidDate(row.rgstYmd) || "-",
+    amount: formatRegistryAmount(row.inprStngAmt),
+  }));
+}
+
 function buildAreaRows(lot, detail) {
   const fromDetail = asArray(detail?.areas).map((entry) => ({
     usage: entry.clandCont
@@ -1679,6 +1725,11 @@ function LotDetailPanel({
   const seizedMainPoints = buildSeizedMainPoints(pageMeta);
   const seizedCautionItems = buildSeizedCautionItems(pageMeta, areaRows, usageRows, detailItem);
   const deliveryNote = formatDeliveryNote(lot, detailItem);
+  const leaseRows = buildLeaseRows(detail);
+  const registryRows = buildRegistryRows(detail);
+  const occupancyCount = asArray(detail?.occupancyRels).length;
+  const distributionCount = asArray(detail?.distributionItems).length;
+  const locationMapUrl = toOnbidFileProxy(detail?.locationMapUrl || pickLocationMapUrl(detailItem));
   const roadAddress = lot.roadAddress || detailItem.rdnmAdrs || raw.rdnmAdrs || raw.roadNmRadr || "-";
   const lotAddress = pickFullLotAddress(lot, detailItem);
   const isSeized = /압류/.test(propertyTag);
@@ -1789,8 +1840,20 @@ function LotDetailPanel({
                 }}
               />
             )}
-            {mediaMode === "map" && links?.embed && (
+            {mediaMode === "map" && locationMapUrl && (
+              <img
+                src={locationMapUrl}
+                alt={`${lot.title} 위치도`}
+                loading="lazy"
+                decoding="async"
+                referrerPolicy="no-referrer"
+              />
+            )}
+            {mediaMode === "map" && !locationMapUrl && links?.embed && (
               <iframe title={`${lot.title} 위치도`} src={links.embed} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+            )}
+            {mediaMode === "map" && !locationMapUrl && !links?.embed && (
+              <div className="lot-detail-media-empty">등록된 위치도가 없습니다.</div>
             )}
             {mediaMode === "photo" && !galleryLoading && !currentPhoto && (
               <div className="lot-detail-media-empty">등록된 사진이 없습니다.</div>
@@ -2119,6 +2182,82 @@ function LotDetailPanel({
                   <span className={/인도|명도/.test(deliveryNote) ? "lot-detail-seized-blink" : ""}>{deliveryNote}</span>
                 </div>
               </div>
+
+              {isSeized && (
+                <>
+                  <div className="lot-detail-section">
+                    <h4>임대차 정보 (감정평가서 및 배분요구서 기준)</h4>
+                    <table className="lot-detail-table lot-detail-mobile-table">
+                      <thead>
+                        <tr>
+                          <th>구분</th>
+                          <th>성명</th>
+                          <th>보증금</th>
+                          <th>차임</th>
+                          <th>환산보증금</th>
+                          <th>확정일</th>
+                          <th>전입일</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leaseRows.length > 0 ? leaseRows.map((row, index) => (
+                          <tr key={`${row.category}-${row.name}-${index}`}>
+                            <td>{row.category}</td>
+                            <td>{row.name}</td>
+                            <td>{row.deposit}</td>
+                            <td>{row.rent}</td>
+                            <td>{row.convertedDeposit}</td>
+                            <td>{row.confirmDate}</td>
+                            <td>{row.moveInDate}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan={7}>조회된 결과가 없습니다.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                    <p className="lot-detail-section-note muted">감정평가서 및 배분요구한 임차 정보는 변동될 수 있으니 참고자료로만 활용하시기 바랍니다.</p>
+                  </div>
+
+                  <div className="lot-detail-section">
+                    <h4>등기사항증명서 주요정보</h4>
+                    <table className="lot-detail-table lot-detail-mobile-table">
+                      <thead>
+                        <tr>
+                          <th>권리종류</th>
+                          <th>권리자명</th>
+                          <th>설정일자</th>
+                          <th>설정금액</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {registryRows.length > 0 ? registryRows.map((row, index) => (
+                          <tr key={`${row.kind}-${row.holder}-${index}`}>
+                            <td>{row.kind}</td>
+                            <td>{row.holder}</td>
+                            <td>{row.date}</td>
+                            <td>{row.amount}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan={4}>조회된 결과가 없습니다.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                    <p className="lot-detail-section-note muted">입찰 전 반드시 등기사항증명서를 확인하시기 바랍니다. 위 정보는 공매대행 의뢰 시점 기준으로 변동될 수 있습니다.</p>
+                  </div>
+
+                  <div className="lot-detail-section">
+                    <h4>배분요구 및 채권신고현황</h4>
+                    <p className="muted">{distributionCount > 0 ? `총 ${distributionCount}건` : "조회된 결과가 없습니다."}</p>
+                    <p className="lot-detail-section-note muted">배분요구서 및 채권신고 기준으로 작성되었으며 배분요구액 및 채권액은 변동될 수 있습니다.</p>
+                  </div>
+
+                  <div className="lot-detail-section">
+                    <h4>점유관계</h4>
+                    <p className="muted">{occupancyCount > 0 ? `총 ${occupancyCount}건` : "조회된 결과가 없습니다."}</p>
+                    <p className="lot-detail-section-note muted">감정평가서 및 현황조사서 기준으로 작성되었으며 변동될 수 있습니다.</p>
+                  </div>
+                </>
+              )}
           </section>
 
           <section
@@ -2147,6 +2286,18 @@ function LotDetailPanel({
                   <span className="lot-detail-chip-row">
                     {restrictionTags.map((tag) => <span key={tag} className="lot-detail-chip gray">{tag}</span>)}
                   </span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>물건관리번호</strong>
+                  <span>{lot.id}</span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>공매번호</strong>
+                  <span>{lot.pbctNo || detailItem.pbctNo || "-"}</span>
+                </div>
+                <div className="lot-detail-field">
+                  <strong>온비드물건번호</strong>
+                  <span>{lot.onbidNo || detailItem.onbidCltrno || "-"}</span>
                 </div>
                 <div className="lot-detail-field">
                   <strong>입찰기간</strong>
@@ -2179,7 +2330,12 @@ function LotDetailPanel({
             aria-labelledby="lot-detail-tab-market"
           >
             <h3 id="lot-detail-tab-market"><CheckCircle2 size={18} /> 인근 시세 및 낙찰 사례</h3>
-            <p className="muted">인근 시세와 낙찰 사례는 온비드 원문에서 확인할 수 있습니다. 하단의 온비드 상세 보기를 이용하세요.</p>
+            <div className="lot-detail-section">
+              <h4>인근 낙찰 물건</h4>
+              <p className="muted">최근 6개월 간 해당물건과 동일한 지역, 용도를 기준으로 온비드를 통해 낙찰된 물건입니다.</p>
+              <p className="muted">조회된 결과가 없습니다.</p>
+            </div>
+            <p className="lot-detail-section-note muted">상세 시세·낙찰 사례는 온비드 원문에서 추가로 확인할 수 있습니다.</p>
           </section>
         </div>
       </section>
@@ -2386,6 +2542,11 @@ function normalizeDetail(payload) {
       ?? item?.rlstAreaList?.item
       ?? item?.rlstAreaList,
     ),
+    leaseInfos: asArray(item?.leasInfList?.item ?? item?.leasInfList),
+    registryInfos: asArray(item?.rgstPrmrInfList?.item ?? item?.rgstPrmrInfList),
+    occupancyRels: asArray(item?.ocpyRelList?.item ?? item?.ocpyRelList),
+    distributionItems: asArray(item?.dtbtRqrMtrsList?.item ?? item?.dtbtRqrMtrsList),
+    locationMapUrl: pickLocationMapUrl(item),
   };
 }
 
