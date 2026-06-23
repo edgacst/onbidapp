@@ -1802,6 +1802,23 @@ a {
   margin: 0 auto 16px;
 }
 
+.explore-search-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  max-width: 1440px;
+  margin: 0 auto 16px;
+  padding: 8px 0 12px;
+  background: rgba(247, 249, 251, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 rgba(223, 230, 235, 0.95);
+}
+
+.explore-search-sticky .controls {
+  margin-bottom: 0;
+}
+
 .controls.api-controls {
   grid-template-columns: minmax(220px, 2fr) repeat(5, minmax(108px, 1fr)) 96px;
 }
@@ -3486,6 +3503,14 @@ a {
   .controls.api-controls,
   .lot-row {
     grid-template-columns: 1fr;
+  }
+
+  .explore-search-sticky {
+    top: 0;
+    margin: 0 auto 10px;
+    padding: 6px 0 10px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 4px 16px rgba(30, 49, 65, 0.08);
   }
 
   .controls {

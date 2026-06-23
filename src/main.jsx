@@ -3343,6 +3343,7 @@ function App() {
               <div><span><TrendingDown size={18} /> 평균 할인율</span><strong>{averageDiscount}%</strong></div>
             </section>
 
+            <div className="explore-search-sticky">
             <form className="controls api-controls" onSubmit={submitSearch}>
           <label className="search-field">
             <Search size={18} />
@@ -3390,6 +3391,7 @@ function App() {
             {loading ? "검색 중..." : "조회"}
           </button>
             </form>
+            </div>
 
             {checkMode && (
               <section className="bid-check-panel">
