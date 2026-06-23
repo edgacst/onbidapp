@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import { dirname, join } from "node:path";
@@ -12,6 +12,7 @@ function parseArgs(argv) {
     server: "dev",
     keepAlive: false,
     openBrowser: false,
+    openDevice: true,
     useTunnel: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -20,6 +21,8 @@ function parseArgs(argv) {
     else if (arg === "--server") options.server = argv[++i] || options.server;
     else if (arg === "--keep-alive") options.keepAlive = true;
     else if (arg === "--no-browser") options.openBrowser = false;
+    else if (arg === "--browser") options.openBrowser = true;
+    else if (arg === "--no-device") options.openDevice = false;
     else if (arg === "--tunnel") options.useTunnel = true;
   }
   return options;
@@ -63,6 +66,35 @@ function openBrowser(url) {
   }
   const opener = process.platform === "darwin" ? "open" : "xdg-open";
   spawn(opener, [url], { detached: true, stdio: "ignore" }).unref();
+}
+
+function runAdb(args) {
+  try {
+    return execFileSync("adb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function getAdbDevices() {
+  const output = runAdb(["devices"]);
+  if (!output) return [];
+  return output
+    .split("\n")
+    .slice(1)
+    .map((line) => line.trim())
+    .filter((line) => line && line.endsWith("device"))
+    .map((line) => line.split("\t")[0]);
+}
+
+function setupAdbReverse(port, deviceId = "") {
+  const prefix = deviceId ? ["-s", deviceId] : [];
+  runAdb([...prefix, "reverse", `tcp:${port}`, `tcp:${port}`]);
+}
+
+function openOnAndroidDevice(url, deviceId = "") {
+  const prefix = deviceId ? ["-s", deviceId] : [];
+  runAdb([...prefix, "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", url]);
 }
 
 async function ensureServer(options) {
@@ -120,11 +152,28 @@ export async function launchPhone(argv = process.argv.slice(2)) {
 
   const localUrl = `http://localhost:${options.port}/`;
   const lanUrls = lanAddresses().map((address) => `http://${address}:${options.port}/`);
-  const phoneUrl = lanUrls[0] || localUrl;
+  const adbDevices = getAdbDevices();
+  const adbDeviceId = adbDevices[0] || "";
+
+  if (adbDevices.length > 0) {
+    setupAdbReverse(options.port, adbDeviceId);
+    const deviceUrl = `http://127.0.0.1:${options.port}/`;
+    console.log("\n=== USB 디버깅 기기 (Android) ===");
+    console.log(`연결: ${adbDeviceId}`);
+    console.log(`폰 URL: ${deviceUrl}`);
+    console.log("PC 디버깅: Chrome → chrome://inspect → Remote devices");
+    if (options.openDevice) {
+      openOnAndroidDevice(deviceUrl, adbDeviceId);
+      console.log("연결된 폰 Chrome에서 앱을 열었습니다.");
+    }
+  }
 
   console.log("\n=== 폰 접속 (같은 Wi-Fi) ===");
   console.log(`PC:   ${localUrl}`);
   for (const url of lanUrls) console.log(`폰:   ${url}`);
+  if (adbDevices.length === 0) {
+    console.log("USB 디버깅: 폰 USB 연결 후 npm run dev:phone 을 사용하세요.");
+  }
 
   if (options.useTunnel) {
     const tunnelUrl = await startTunnel(options.port);
@@ -143,7 +192,6 @@ export async function launchPhone(argv = process.argv.slice(2)) {
   }
 
   if (options.openBrowser) openBrowser(localUrl);
-  console.log("\n폰에서는 PC가 아니라 폰 브라우저(Chrome/Safari)에서 Wi-Fi 주소를 직접 입력하세요.\n");
 
   if (options.keepAlive) await new Promise(() => {});
 }

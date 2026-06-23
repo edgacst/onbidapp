@@ -98,9 +98,10 @@ function lanAddresses() {
 app.listen(port, "0.0.0.0", () => {
   console.log(`✅ 공매레이더 서버 http://localhost:${port}`);
   for (const address of lanAddresses()) {
-    console.log(`   폰 접속: http://${address}:${port}  (폰 브라우저에 직접 입력)`);
+    console.log(`   폰(Wi-Fi): http://${address}:${port}`);
   }
-  console.log("   ※ PC 브라우저 주소(localhost)를 폰에 입력하면 안 됩니다.");
+  console.log(`   폰(USB):  adb reverse tcp:${port} tcp:${port} → http://127.0.0.1:${port}`);
+  console.log("   폰 디버깅: npm run dev:phone");
   if (!existsSync(distPath)) {
     console.log("   (프론트 빌드 없음 — API 프록시만 동작)");
   }
