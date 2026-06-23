@@ -68,10 +68,30 @@ function openBrowser(url) {
   spawn(opener, [url], { detached: true, stdio: "ignore" }).unref();
 }
 
+function resolveAdbPath() {
+  if (process.env.ADB_PATH && existsSync(process.env.ADB_PATH)) return process.env.ADB_PATH;
+
+  const candidates = [
+    process.env.ANDROID_HOME ? join(process.env.ANDROID_HOME, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "",
+    process.env.ANDROID_SDK_ROOT ? join(process.env.ANDROID_SDK_ROOT, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "",
+    join(process.env.LOCALAPPDATA || "", "Android", "Sdk", "platform-tools", "adb.exe"),
+    join(process.env.USERPROFILE || "", "AppData", "Local", "Android", "Sdk", "platform-tools", "adb.exe"),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return "adb";
+}
+
+const adbPath = resolveAdbPath();
+
 function runAdb(args) {
   try {
-    return execFileSync("adb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-  } catch {
+    return execFileSync(adbPath, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  } catch (error) {
+    const detail = error?.stderr?.toString?.() || error?.message || "";
+    if (detail) console.warn(`adb 실패 (${adbPath}): ${detail.trim()}`);
     return "";
   }
 }
@@ -94,7 +114,23 @@ function setupAdbReverse(port, deviceId = "") {
 
 function openOnAndroidDevice(url, deviceId = "") {
   const prefix = deviceId ? ["-s", deviceId] : [];
+  const chromePackages = ["com.android.chrome", "com.chrome.beta", "com.chrome.dev"];
+  for (const pkg of chromePackages) {
+    const result = runAdb([
+      ...prefix,
+      "shell",
+      "am",
+      "start",
+      "-a",
+      "android.intent.action.VIEW",
+      "-d",
+      url,
+      pkg,
+    ]);
+    if (result && !/Error|Exception/i.test(result)) return pkg;
+  }
   runAdb([...prefix, "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", url]);
+  return "";
 }
 
 async function ensureServer(options) {
@@ -159,12 +195,15 @@ export async function launchPhone(argv = process.argv.slice(2)) {
     setupAdbReverse(options.port, adbDeviceId);
     const deviceUrl = `http://127.0.0.1:${options.port}/`;
     console.log("\n=== USB 디버깅 기기 (Android) ===");
+    console.log(`adb:  ${adbPath}`);
     console.log(`연결: ${adbDeviceId}`);
     console.log(`폰 URL: ${deviceUrl}`);
     console.log("PC 디버깅: Chrome → chrome://inspect → Remote devices");
     if (options.openDevice) {
-      openOnAndroidDevice(deviceUrl, adbDeviceId);
-      console.log("연결된 폰 Chrome에서 앱을 열었습니다.");
+      const openedBrowser = openOnAndroidDevice(deviceUrl, adbDeviceId);
+      console.log(openedBrowser
+        ? `연결된 폰 Chrome(${openedBrowser})에서 앱을 열었습니다.`
+        : "폰 브라우저 열기를 시도했습니다. 안 뜨면 폰에서 Chrome으로 직접 접속하세요.");
     }
   }
 
