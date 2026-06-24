@@ -4064,6 +4064,11 @@ function App() {
         : (state.selectedId || parsed.selectedId || "");
       setView(nextView);
       if (nextSelectedId) setSelectedId(nextSelectedId);
+      if (nextView !== "detail") {
+        setDetailLoading(false);
+        setPageMetaLoading(false);
+        setGalleryLoading(false);
+      }
       if ((nextView || "home") !== "search") {
         setCheckMode(false);
         setStatusFocus("");
@@ -4308,6 +4313,21 @@ function App() {
     });
   }
 
+  function closeDetail() {
+    setDetailLoading(false);
+    setPageMetaLoading(false);
+    setGalleryLoading(false);
+
+    const state = window.history.state || {};
+    if (state.appView === "detail" && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    pushAppHistory("search", "");
+    setView("search");
+  }
+
   function pushAppHistory(nextView, nextSelectedId = selectedId) {
     const state = { appView: nextView, selectedId: nextSelectedId || "" };
     const current = window.history.state || {};
@@ -4317,6 +4337,11 @@ function App() {
   }
 
   function openView(nextView) {
+    if (view === "detail" && nextView === "search") {
+      closeDetail();
+      return;
+    }
+
     const shouldReloadAll = nextView === "search" && (statusFocus || checkMode);
     pushAppHistory(nextView);
     setStatusFocus("");
@@ -5210,7 +5235,7 @@ function App() {
         ) : view === "detail" && selected ? (
           <section className="detail-page">
             <header className="detail-mobile-header">
-              <button type="button" className="detail-mobile-back" onClick={() => openView("search")}>
+              <button type="button" className="detail-mobile-back" onClick={closeDetail}>
                 <ChevronLeft size={22} />
                 <span>목록</span>
               </button>
@@ -5224,7 +5249,7 @@ function App() {
                 <Heart size={20} fill={saved.includes(selected.id) ? "currentColor" : "none"} />
               </button>
             </header>
-            <button className="back-button" onClick={() => openView("search")}>목록으로</button>
+            <button className="back-button" onClick={closeDetail}>목록으로</button>
             <LotDetailPanel
               lot={selectedLot}
               detail={detail}
@@ -5454,7 +5479,7 @@ function App() {
         )}
       </section>
 
-      {loading && (
+      {loading && view !== "detail" && (
         <div className="search-loading-overlay" role="alert" aria-live="assertive" aria-busy="true">
           <div className="search-loading-card">
             <Loader2 className="spin" size={36} />
