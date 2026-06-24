@@ -145,13 +145,18 @@ const server = app.listen(port, "0.0.0.0", () => {
 
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
-    console.error(`\n❌ 포트 ${port}이(가) 이미 사용 중입니다. 서버가 이미 켜져 있을 수 있습니다.`);
+    console.error(`\n❌ 포트 ${port}이(가) 이미 사용 중입니다.`);
     printServerUrls(port);
-    console.error("\n그대로 접속해 보세요. 다시 시작하려면:");
-    console.error(`  Get-NetTCPConnection -LocalPort ${port} -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`);
-    console.error("  npm start");
-    process.exit(1);
+    console.error("\n이미 켜져 있으면 그대로 접속하세요. 다시 시작: npm run restart");
+    process.exit(0);
   }
   console.error(err);
   process.exit(1);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
 });

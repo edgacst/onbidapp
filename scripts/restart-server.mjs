@@ -1,42 +1,41 @@
-import { execSync, spawn } from "node:child_process";
-import net from "node:net";
+import { execFileSync, spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  isPortOpen,
+  killPort,
+  lanAddresses,
+  serverPort,
+  waitForPort,
+} from "./server-utils.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const port = Number(process.env.PORT || 3000);
-
-function isPortOpen(targetPort) {
-  return new Promise((resolvePort) => {
-    const socket = net.connect({ host: "127.0.0.1", port: targetPort });
-    socket.once("connect", () => {
-      socket.end();
-      resolvePort(true);
-    });
-    socket.once("error", () => resolvePort(false));
-  });
-}
-
-function killPort(targetPort) {
-  if (process.platform !== "win32") return;
-  const cmd = `Get-NetTCPConnection -LocalPort ${targetPort} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`;
-  try {
-    execSync(`powershell -NoProfile -Command "${cmd}"`, { stdio: "ignore" });
-  } catch {
-    // ignore kill failures
-  }
-}
+const port = serverPort();
 
 if (await isPortOpen(port)) {
   console.log(`포트 ${port} 정리 중...`);
   killPort(port);
-  await new Promise((r) => setTimeout(r, 1500));
+  await new Promise((resolve) => setTimeout(resolve, 2000));
 }
 
-const child = spawn("npm", ["start"], {
-  cwd: root,
-  stdio: "inherit",
-  shell: true,
-});
+console.log("빌드 확인 중...");
+execFileSync("node", ["scripts/ensure-build.mjs"], { cwd: root, stdio: "inherit" });
 
-child.on("exit", (code) => process.exit(code ?? 0));
+console.log("서버 시작 중...");
+spawn("node", ["server/index.js"], {
+  cwd: root,
+  detached: true,
+  stdio: "ignore",
+  env: { ...process.env, PORT: String(port) },
+}).unref();
+
+if (!(await waitForPort(port))) {
+  console.error(`❌ 포트 ${port}에서 서버를 확인할 수 없습니다.`);
+  process.exit(1);
+}
+
+console.log(`✅ 서버 재시작 완료 http://localhost:${port}`);
+for (const address of lanAddresses()) {
+  console.log(`   폰(Wi-Fi): http://${address}:${port}`);
+}
+console.log("   터미널을 닫아도 서버는 백그라운드에서 계속 실행됩니다.");
