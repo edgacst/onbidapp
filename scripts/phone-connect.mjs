@@ -1,3 +1,4 @@
+import os from "node:os";
 import {
   adbPath,
   getAdbDevices,
@@ -6,6 +7,16 @@ import {
   setupAdbReverse,
   setupChromeDevtoolsForward,
 } from "./phone-adb.mjs";
+
+function lanAddresses() {
+  const addresses = new Set();
+  for (const interfaces of Object.values(os.networkInterfaces())) {
+    for (const item of interfaces ?? []) {
+      if (item.family === "IPv4" && !item.internal) addresses.add(item.address);
+    }
+  }
+  return [...addresses];
+}
 
 function parseArgs(argv) {
   const options = {
@@ -62,6 +73,15 @@ async function main() {
   if (options.openDevice) {
     const pkg = openOnAndroidChrome(deviceUrl, deviceId);
     console.log(pkg ? `폰 Chrome(${pkg}) 실행` : "폰 브라우저 실행 시도");
+  }
+
+  const lan = lanAddresses();
+  if (lan.length) {
+    console.log("\n=== 폰 Wi-Fi (같은 공유기) ===");
+    for (const address of lan) {
+      console.log(`폰 URL:  http://${address}:${activePort}/`);
+    }
+    console.log("모바일 데이터 OFF · 연결 안 되면: npm run phone:firewall");
   }
 
   if (!serverRunning) {

@@ -5,6 +5,8 @@
     "dev": "vite --host 0.0.0.0",
     "dev:phone": "node scripts/dev-phone.mjs",
     "phone": "node scripts/phone-connect.mjs",
+    "phone:wifi": "node scripts/phone-wifi.mjs",
+    "phone:firewall": "powershell -ExecutionPolicy Bypass -File scripts/phone-firewall.ps1",
     "phone:setup": "node scripts/phone-setup.mjs",
     "phone:dev": "node scripts/dev-phone.mjs",
     "phone:prod": "node scripts/phone-launch.mjs --port 3000 --server prod --keep-alive",
