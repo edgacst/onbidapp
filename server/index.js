@@ -140,7 +140,7 @@ function lanAddresses() {
 }
 
 function printServerUrls(port) {
-  console.log(`✅ 공매레이더 서버 http://localhost:${port}`);
+  console.log(`✅ 에드가공매 서버 http://localhost:${port}`);
   for (const address of lanAddresses()) {
     console.log(`   폰(Wi-Fi): http://${address}:${port}`);
   }

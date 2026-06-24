@@ -214,7 +214,7 @@ const appViews = ["home", "search", "watch", "map", "board", "notice", "admin", 
 const defaultNotices = [
   {
     id: "notice-1",
-    title: "공매레이더 서비스 이용 안내",
+    title: "에드가공매 서비스 이용 안내",
     body: "온비드 공매 물건 조회, 관심 물건 저장, 질문게시판 기능을 이용할 수 있습니다. 상세 정보는 온비드 원문과 함께 확인해주세요.",
     createdAt: "2026.06.01",
     pinned: true,
@@ -4841,7 +4841,7 @@ function App() {
         <div className="brand">
           <span className="brand-mark"><Gavel size={22} /></span>
           <div>
-            <strong>공매레이더</strong>
+            <strong>에드가공매</strong>
             <small>온비드 실시간 분석</small>
           </div>
         </div>
@@ -4864,7 +4864,7 @@ function App() {
         <header className="topbar">
           <div>
             <h1>
-              {view === "home" && "공매레이더"}
+              {view === "home" && "에드가공매"}
               {view === "search" && (assetTypeSearchTitle[homeAssetType] || assetTypeSearchTitle.realty)}
               {view === "detail" && "물건 상세"}
               {view === "watch" && "관심 물건"}
@@ -4886,7 +4886,7 @@ function App() {
               {view === "notice" && "서비스 안내와 변경사항을 확인합니다."}
               {view === "admin" && "공지와 질문 현황을 관리합니다."}
               {view === "login" && "내 관심 물건과 질문 이력을 이어서 관리합니다."}
-              {view === "signup" && "공매레이더 회원 정보를 만듭니다."}
+              {view === "signup" && "에드가공매 회원 정보를 만듭니다."}
               {view === "mypage" && "관심 물건, 질문, 계정 정보를 한곳에서 확인합니다."}
             </p>
           </div>
@@ -5238,7 +5238,7 @@ function App() {
               <div className="board-toolbar">
                 <div>
                   <h2>공지사항</h2>
-                  <p>공매레이더 운영 안내와 변경사항을 확인하세요.</p>
+                  <p>에드가공매 운영 안내와 변경사항을 확인하세요.</p>
                 </div>
                 {isAdminMember(member) && (
                   <div className="board-toolbar-actions">
