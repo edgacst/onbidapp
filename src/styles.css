@@ -2635,6 +2635,8 @@ a {
   border: 1px solid #dfe6eb;
   border-radius: 8px;
   padding: 16px;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 @media (min-width: 1121px) {
@@ -2750,6 +2752,10 @@ a {
   max-width: 100%;
 }
 
+.lot-detail-panel > * {
+  min-width: 0;
+}
+
 .lot-detail-panel--page {
   border: 1px solid #dfe6eb;
   border-radius: 10px;
@@ -2760,6 +2766,8 @@ a {
 
 .lot-detail-panel--aside {
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lot-detail-hero {
@@ -3426,20 +3434,32 @@ a {
   position: sticky;
   top: 0;
   z-index: 40;
-  margin: 0 -12px 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0 0 8px;
   background: rgba(250, 251, 252, 0.96);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid #edf1f4;
 }
 
+.lot-detail-panel--page .lot-detail-tabs-bar {
+  margin: 0 -12px 8px;
+}
+
 .lot-detail-tabs-bar.is-pinned {
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
-  margin: 0;
-  box-shadow: 0 4px 18px rgba(21, 27, 35, 0.1);
+  left: auto;
+  right: auto;
+  margin: 0 0 8px;
+  box-shadow: none;
+}
+
+.lot-detail-panel--page .lot-detail-tabs-bar.is-pinned {
+  margin: 0 -12px 8px;
 }
 
 .lot-detail-panel--aside .lot-detail-tabs-bar,
@@ -3451,6 +3471,7 @@ a {
   margin: 0 0 8px;
   box-shadow: none;
   z-index: 20;
+  overflow: hidden;
 }
 
 .lot-detail-panel--aside .lot-detail-tabs-spacer {
@@ -3458,6 +3479,15 @@ a {
 }
 
 .lot-detail-tabs-bar-inner {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.lot-detail-panel--page .lot-detail-tabs-bar-inner {
   max-width: 1280px;
   margin: 0 auto;
   padding: 0 12px;
@@ -3467,6 +3497,9 @@ a {
   display: flex;
   flex-wrap: nowrap;
   gap: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;

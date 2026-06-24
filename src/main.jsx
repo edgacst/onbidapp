@@ -2232,38 +2232,7 @@ function LotDetailPanel({
   }, [lot?.id, showResult]);
 
   useEffect(() => {
-    if (layout === "aside") {
-      setTabsPinned(false);
-      return undefined;
-    }
-
-    const sentinel = tabsSentinelRef.current;
-    if (!sentinel) return undefined;
-
-    const mobileMq = window.matchMedia("(max-width: 760px)");
-    const syncPinned = (entry) => {
-      if (mobileMq.matches) {
-        setTabsPinned(false);
-        return;
-      }
-      setTabsPinned(!entry.isIntersecting);
-    };
-
-    const observer = new IntersectionObserver(
-      ([entry]) => syncPinned(entry),
-      { root: null, threshold: 0, rootMargin: "0px" },
-    );
-    observer.observe(sentinel);
-
-    const onMobileChange = () => {
-      if (mobileMq.matches) setTabsPinned(false);
-    };
-    mobileMq.addEventListener("change", onMobileChange);
-
-    return () => {
-      observer.disconnect();
-      mobileMq.removeEventListener("change", onMobileChange);
-    };
+    setTabsPinned(false);
   }, [lot?.id, layout]);
 
   useEffect(() => {
@@ -2333,18 +2302,22 @@ function LotDetailPanel({
   function goToDetailTab(tabId) {
     setActiveTab(tabId);
     scrollingToTab.current = true;
+    const selectedTabId = tabId;
 
     const tabButton = tabsBarRef.current?.querySelector(`[aria-controls="lot-detail-section-${tabId}"]`);
     tabButton?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
 
+    const runScroll = () => scrollDetailSection(tabId);
+
     requestAnimationFrame(() => {
-      scrollDetailSection(tabId);
+      runScroll();
       window.setTimeout(() => {
-        scrollDetailSection(tabId);
+        runScroll();
         window.setTimeout(() => {
           scrollingToTab.current = false;
-        }, 400);
-      }, 500);
+          setActiveTab(selectedTabId);
+        }, 500);
+      }, 450);
     });
   }
 
