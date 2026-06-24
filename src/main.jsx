@@ -3490,6 +3490,52 @@ async function fetchLotFromListByManagementNo(lotId, assetType) {
   return null;
 }
 
+async function fetchLotFromResultListByManagementNo(lotId, assetType) {
+  const end = formatYmd(new Date());
+  const baseFilters = {
+    assetType,
+    managementNo: lotId,
+    propertyType: "",
+    pageNo: 1,
+    numOfRows: 10,
+    keyword: "",
+    bidType: "",
+    statusCode: "",
+    dspsMethod: "",
+    usageCategoryId: "",
+    resultDateStart: "20240101",
+    resultDateEnd: end,
+  };
+
+  const tryLookup = async (overrides = {}) => {
+    try {
+      const result = await fetchOnbidResultLots({ ...baseFilters, ...overrides });
+      return result.lots.find((lot) => lot.id === lotId) || null;
+    } catch {
+      return null;
+    }
+  };
+
+  for (const statusCode of ["", "0010", "0011"]) {
+    const found = await tryLookup({ statusCode });
+    if (found) return found;
+  }
+
+  const propertyTypes = assetType === "movable"
+    ? ["0007", "0010", "0005", "0004", "0002"]
+    : assetType === "car"
+      ? ["0007", "0010", "0005"]
+      : ["0007", "0010", "0005", "0002", "0008"];
+
+  for (const propertyType of propertyTypes) {
+    for (const statusCode of ["0010", "0011", ""]) {
+      const found = await tryLookup({ propertyType, statusCode });
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 async function fetchLotFromDetail(lotId, assetType) {
   try {
     const detail = await fetchOnbidDetail({ assetType }, { id: lotId, conditionNo: "", assetType });
@@ -3508,7 +3554,9 @@ async function fetchLotByManagementNo(lotId, preferredAssetType = "realty") {
   const lookupAssetType = async (assetType) => {
     const fromDetail = await fetchLotFromDetail(lotId, assetType);
     if (fromDetail) return fromDetail;
-    return fetchLotFromListByManagementNo(lotId, assetType);
+    const fromList = await fetchLotFromListByManagementNo(lotId, assetType);
+    if (fromList) return fromList;
+    return fetchLotFromResultListByManagementNo(lotId, assetType);
   };
 
   const preferred = await lookupAssetType(preferredAssetType);
@@ -3523,7 +3571,9 @@ async function fetchLotByManagementNo(lotId, preferredAssetType = "realty") {
 }
 
 async function fetchOnbidResultLots(filters) {
-  const { start, end } = resultDateRange();
+  const { start, end } = filters.resultDateStart && filters.resultDateEnd
+    ? { start: filters.resultDateStart, end: filters.resultDateEnd }
+    : resultDateRange();
   const params = new URLSearchParams({
     pageNo: String(filters.pageNo),
     numOfRows: String(filters.numOfRows),
@@ -3534,6 +3584,7 @@ async function fetchOnbidResultLots(filters) {
     opbdDtEnd: end,
   });
 
+  if (filters.managementNo?.trim()) params.set("cltrMngNo", filters.managementNo.trim());
   if (filters.keyword.trim()) params.set("onbidCltrNm", filters.keyword.trim());
   if (filters.bidType) params.set("bidDivCd", filters.bidType);
   if (filters.statusCode) params.set("pbctStatCd", filters.statusCode);
@@ -4062,15 +4113,14 @@ function App() {
           }
           setData({ lots: [foundLot], pageNo: 1, numOfRows: PAGE_SIZE, totalCount: 1, sample: false });
           setSelectedId(preserveId);
-          setStatusTotals({ available: 1, ready: matchesStatusFocus(foundLot, "ready") ? 1 : 0, sold: 0, failed: 0 });
+          setStatusTotals({
+            available: matchesStatusFocus(foundLot, "available") ? 1 : 0,
+            ready: matchesStatusFocus(foundLot, "ready") ? 1 : 0,
+            sold: matchesStatusFocus(foundLot, "sold") ? 1 : 0,
+            failed: matchesStatusFocus(foundLot, "failed") ? 1 : 0,
+          });
           return;
         }
-
-        setData({ lots: [], pageNo: 1, numOfRows: PAGE_SIZE, totalCount: 0, sample: false });
-        setSelectedId(preserveId);
-        setStatusTotals({ available: 0, ready: 0, sold: 0, failed: 0 });
-        setError("해당 물건관리번호를 찾지 못했습니다. 잠시 후 다시 시도해주세요.");
-        return;
       }
 
       const keywordLotId = isOnbidLotId(filters.keyword) ? normalizeLotId(filters.keyword.trim()) : "";
