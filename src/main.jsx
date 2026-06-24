@@ -51,7 +51,9 @@ const ONBID_RESULT_DETAIL_PATH = "/B010003/OnbidCltrBidRsltDtlSrvc2/getCltrBidRs
 const PAGE_SIZE = 50;
 const API_FETCH_TIMEOUT_MS = 25000;
 const PHOTO_PROBE_TIMEOUT_MS = 3000;
-const PHOTO_PROBE_MAX = 10;
+const PHOTO_PROBE_MAX = 6;
+const PAGE_META_TIMEOUT_MS = 20000;
+const GALLERY_RESOLVE_TIMEOUT_MS = 12000;
 const RESULT_THUMB_PREFETCH_LIMIT = 8;
 const detailResponseCache = new Map();
 const htmlPhotoCache = new Map();
@@ -1578,6 +1580,15 @@ function resolveLotPhotos(lot, detail) {
   return photos;
 }
 
+function withTimeout(promise, timeoutMs, fallbackValue) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => {
+      window.setTimeout(() => resolve(fallbackValue), timeoutMs);
+    }),
+  ]);
+}
+
 async function resolveLotPhotosForDisplay(lot, detail) {
   const fromDetail = resolveLotPhotos(lot, detail);
   const thumbnail = extractPhotoUrl(lot?.thumbnail);
@@ -1591,20 +1602,22 @@ async function resolveLotPhotosForDisplay(lot, detail) {
   }
 
   if (fromDetail.length > 1) return dedupePhotoUrls(fromDetail);
+  if (thumbnail) return [thumbnail];
 
-  const fromHtml = await fetchOnbidHtmlPhotoGallery(lot, detail, { quick: true });
+  const fromHtml = await withTimeout(
+    fetchOnbidHtmlPhotoGallery(lot, detail, { quick: true }),
+    GALLERY_RESOLVE_TIMEOUT_MS,
+    [],
+  );
   if (fromHtml.length) return dedupePhotoUrls(fromHtml);
 
-  const fromAttachment = thumbnail ? await probeGalleryFromThumbnail(thumbnail) : [];
+  const fromAttachment = thumbnail
+    ? await withTimeout(probeGalleryFromThumbnail(thumbnail), PHOTO_PROBE_TIMEOUT_MS * 2, [])
+    : [];
   const merged = [...new Set([thumbnail, ...fromAttachment, ...fromDetail].filter(Boolean))];
   if (merged.length) return merged;
 
-  const fromHtmlFull = await fetchOnbidHtmlPhotoGallery(lot, detail);
-  if (fromHtmlFull.length) {
-    return dedupePhotoUrls(fromHtmlFull);
-  }
-
-  return fromDetail.length ? fromDetail : (thumbnail ? [thumbnail] : []);
+  return fromDetail.length ? fromDetail : [];
 }
 
 function pickUsageTag(lot) {
@@ -3189,9 +3202,9 @@ async function fetchLotByManagementNo(lotId, preferredAssetType = "realty") {
   if (!lotId) return null;
 
   const lookupAssetType = async (assetType) => {
-    const fromList = await fetchLotFromListByManagementNo(lotId, assetType);
-    if (fromList) return fromList;
-    return fetchLotFromDetail(lotId, assetType);
+    const fromDetail = await fetchLotFromDetail(lotId, assetType);
+    if (fromDetail) return fromDetail;
+    return fetchLotFromListByManagementNo(lotId, assetType);
   };
 
   const preferred = await lookupAssetType(preferredAssetType);
@@ -3925,7 +3938,8 @@ function App() {
     if (!selected || data.sample) {
       setDetail(null);
       setDetailError("");
-      return;
+      setDetailLoading(false);
+      return undefined;
     }
 
     let cancelled = false;
@@ -3947,6 +3961,7 @@ function App() {
 
     return () => {
       cancelled = true;
+      setDetailLoading(false);
     };
   }, [selectedLot?.id, selected?.id, selectedLot?.conditionNo, selectedLot?.onbidNo, selectedLot?.pbctNo, selectedLot?.noticeNo, selected?.assetType, data.sample]);
 
@@ -3975,12 +3990,13 @@ function App() {
   useEffect(() => {
     if (!selected || data.sample) {
       setPageMeta(null);
-      return;
+      setPageMetaLoading(false);
+      return undefined;
     }
 
     let cancelled = false;
     setPageMetaLoading(true);
-    fetchOnbidPageMeta(selectedLot, detail)
+    withTimeout(fetchOnbidPageMeta(selectedLot, detail), PAGE_META_TIMEOUT_MS, null)
       .then((nextMeta) => {
         if (!cancelled) setPageMeta(nextMeta);
       })
@@ -3993,22 +4009,25 @@ function App() {
 
     return () => {
       cancelled = true;
+      setPageMetaLoading(false);
     };
   }, [selectedLot?.id, selectedLot?.conditionNo, selectedLot?.onbidNo, selectedLot?.pbctNo, selectedLot?.noticeNo, detail?.item, data.sample]);
 
   useEffect(() => {
-    if (!selected || data.sample || loading) {
+    if (!selected || data.sample) {
       setGalleryPhotos([]);
       setGalleryLoading(false);
       return undefined;
     }
 
     let cancelled = false;
+    const thumb = extractPhotoUrl(selected.thumbnail);
+    if (thumb) setGalleryPhotos([thumb]);
     setGalleryLoading(true);
 
-    resolveLotPhotosForDisplay(selected, detail)
+    withTimeout(resolveLotPhotosForDisplay(selected, detail), GALLERY_RESOLVE_TIMEOUT_MS, thumb ? [thumb] : [])
       .then((photos) => {
-        if (!cancelled) setGalleryPhotos(photos);
+        if (!cancelled) setGalleryPhotos(photos.length ? photos : (thumb ? [thumb] : []));
       })
       .finally(() => {
         if (!cancelled) setGalleryLoading(false);
@@ -4016,8 +4035,9 @@ function App() {
 
     return () => {
       cancelled = true;
+      setGalleryLoading(false);
     };
-  }, [selected?.id, selected?.thumbnail, selected?.conditionNo, detail, data.sample, loading]);
+  }, [selected?.id, selected?.thumbnail, selected?.conditionNo, detail, data.sample]);
 
   function submitSearch(event) {
     event.preventDefault();
