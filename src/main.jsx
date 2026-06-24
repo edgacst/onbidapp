@@ -50,7 +50,9 @@ const ONBID_RESULT_LIST_PATH = "/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsl
 const ONBID_RESULT_DETAIL_PATH = "/B010003/OnbidCltrBidRsltDtlSrvc2/getCltrBidRsltDtl2";
 const PAGE_SIZE = 50;
 const API_FETCH_TIMEOUT_MS = 25000;
-const PHOTO_PROBE_TIMEOUT_MS = 8000;
+const PHOTO_PROBE_TIMEOUT_MS = 3000;
+const PHOTO_PROBE_MAX = 10;
+const RESULT_THUMB_PREFETCH_LIMIT = 8;
 const detailResponseCache = new Map();
 const htmlPhotoCache = new Map();
 
@@ -1207,6 +1209,46 @@ function parseOnbidDetailHtml(html) {
 }
 
 const onbidPageMetaCache = new Map();
+const onbidDetailHtmlCache = new Map();
+
+async function fetchOnbidDetailHtml(lot, detail = null) {
+  const cacheKey = `html:${lot?.id}:${lot?.conditionNo || ""}:${lot?.pbctNo || ""}`;
+  if (onbidDetailHtmlCache.has(cacheKey)) return onbidDetailHtmlCache.get(cacheKey);
+
+  const url = onbidDetailPageProxyUrl(lot, detail);
+  if (!url) {
+    onbidDetailHtmlCache.set(cacheKey, "");
+    return "";
+  }
+
+  try {
+    const response = await apiFetch(url);
+    const html = response.ok ? await response.text() : "";
+    onbidDetailHtmlCache.set(cacheKey, html);
+    return html;
+  } catch {
+    onbidDetailHtmlCache.set(cacheKey, "");
+    return "";
+  }
+}
+
+function extractPicCountFromHtml(html) {
+  const raw = html.match(/id="picCnt"[^>]*value="([^"]*)"/)?.[1];
+  const count = Number(raw);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+function buildQuickPhotosFromMeta(meta, maxCount = 6) {
+  const limit = Math.max(1, Math.min(maxCount, 10));
+  return Array.from({ length: limit }, (_, index) => (
+    buildOnbidFileDownloadUrl(meta, index + 1, "ORGNL_NM")
+  ));
+}
+
+function lotLooksSeized(lot) {
+  const tag = String(lot?.raw?.prptDivNm || lot?.tags?.[0] || "");
+  return /압류/.test(tag);
+}
 
 async function fetchOnbidPageMeta(lot, detail = null) {
   if (!lot?.id) return null;
@@ -1222,16 +1264,18 @@ async function fetchOnbidPageMeta(lot, detail = null) {
   }
 
   try {
-    const response = await apiFetch(url);
-    const html = await response.text();
-    if (!response.ok) {
+    const html = await fetchOnbidDetailHtml(lot, detail);
+    if (!html || html.length < 1000) {
       if (apiMeta) onbidPageMetaCache.set(cacheKey, apiMeta);
       return apiMeta;
     }
     const htmlMeta = parseOnbidDetailHtml(html);
-    const formParams = extractOnbidDetailFormParams(html);
-    const ajaxMeta = await fetchOnbidAjaxMeta(formParams);
-    const merged = mergePageMeta(mergePageMeta(apiMeta, htmlMeta), ajaxMeta);
+    let merged = mergePageMeta(apiMeta, htmlMeta);
+    if (lotLooksSeized(lot)) {
+      const formParams = extractOnbidDetailFormParams(html);
+      const ajaxMeta = formParams ? await fetchOnbidAjaxMeta(formParams) : null;
+      merged = mergePageMeta(merged, ajaxMeta);
+    }
     if (merged) onbidPageMetaCache.set(cacheKey, merged);
     return merged;
   } catch {
@@ -1368,26 +1412,26 @@ function extractOnbidHtmlFileMeta(html) {
   };
 }
 
-async function fetchOnbidHtmlPhotoGallery(lot, detail = null) {
+async function fetchOnbidHtmlPhotoGallery(lot, detail = null, options = {}) {
   if (!lot?.id) return [];
-  const cacheKey = `html-photos:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
+  const mode = options.quick ? "quick" : "full";
+  const cacheKey = `html-photos:${mode}:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
   if (htmlPhotoCache.has(cacheKey)) return htmlPhotoCache.get(cacheKey);
 
-  const url = onbidDetailPageProxyUrl(lot, detail);
-  if (!url) {
-    htmlPhotoCache.set(cacheKey, []);
-    return [];
-  }
-
   try {
-    const response = await apiFetch(url);
-    const html = await response.text();
-    if (!response.ok || html.length < 1000) {
+    const html = await fetchOnbidDetailHtml(lot, detail);
+    if (!html || html.length < 1000) {
       htmlPhotoCache.set(cacheKey, []);
       return [];
     }
     const meta = extractOnbidHtmlFileMeta(html);
-    const photos = meta ? await probeGalleryFromFileMeta(meta) : [];
+    if (!meta) {
+      htmlPhotoCache.set(cacheKey, []);
+      return [];
+    }
+    const photos = options.quick
+      ? buildQuickPhotosFromMeta(meta, extractPicCountFromHtml(html) || 3)
+      : await probeGalleryFromFileMeta(meta);
     htmlPhotoCache.set(cacheKey, photos);
     return photos;
   } catch {
@@ -1396,15 +1440,18 @@ async function fetchOnbidHtmlPhotoGallery(lot, detail = null) {
   }
 }
 
-async function enrichResultLotsWithThumbnails(lots, concurrency = 4) {
-  const targets = lots.filter((lot) => !lot.thumbnail && isResultLot(lot));
+async function enrichResultLotsWithThumbnails(lots, options = {}) {
+  const quick = options.quick !== false;
+  const limit = Number(options.limit) || RESULT_THUMB_PREFETCH_LIMIT;
+  const targets = lots.filter((lot) => !lot.thumbnail && isResultLot(lot)).slice(0, limit);
   if (!targets.length) return lots;
 
   const updates = new Map();
+  const concurrency = 3;
   for (let index = 0; index < targets.length; index += concurrency) {
     const slice = targets.slice(index, index + concurrency);
     await Promise.all(slice.map(async (lot) => {
-      const photos = await fetchOnbidHtmlPhotoGallery(lot).catch(() => []);
+      const photos = await fetchOnbidHtmlPhotoGallery(lot, null, { quick }).catch(() => []);
       if (photos[0]) updates.set(lot.id, photos[0]);
     }));
   }
@@ -1459,16 +1506,14 @@ async function probeGalleryFromThumbnail(thumbnailUrl) {
   }
 
   const photos = [];
-  for (let atchSn = 1; atchSn <= 20; atchSn += 1) {
+  for (let atchSn = 1; atchSn <= PHOTO_PROBE_MAX; atchSn += 1) {
     const originalUrl = buildOnbidFileDownloadUrl(meta, atchSn, "ORGNL_NM");
     const thumbUrl = buildOnbidFileDownloadUrl(meta, atchSn, "THNL_NM");
-    let picked = "";
-
-    if (await probeOnbidPhotoUrl(originalUrl)) {
-      picked = originalUrl;
-    } else if (await probeOnbidPhotoUrl(thumbUrl)) {
-      picked = thumbUrl;
-    }
+    const [hasOriginal, hasThumb] = await Promise.all([
+      probeOnbidPhotoUrl(originalUrl),
+      probeOnbidPhotoUrl(thumbUrl),
+    ]);
+    const picked = hasOriginal ? originalUrl : (hasThumb ? thumbUrl : "");
 
     if (picked) {
       photos.push(picked);
@@ -1547,13 +1592,16 @@ async function resolveLotPhotosForDisplay(lot, detail) {
 
   if (fromDetail.length > 1) return dedupePhotoUrls(fromDetail);
 
+  const fromHtml = await fetchOnbidHtmlPhotoGallery(lot, detail, { quick: true });
+  if (fromHtml.length) return dedupePhotoUrls(fromHtml);
+
   const fromAttachment = thumbnail ? await probeGalleryFromThumbnail(thumbnail) : [];
   const merged = [...new Set([thumbnail, ...fromAttachment, ...fromDetail].filter(Boolean))];
   if (merged.length) return merged;
 
-  const fromHtml = await fetchOnbidHtmlPhotoGallery(lot, detail);
-  if (fromHtml.length) {
-    return dedupePhotoUrls(fromHtml);
+  const fromHtmlFull = await fetchOnbidHtmlPhotoGallery(lot, detail);
+  if (fromHtmlFull.length) {
+    return dedupePhotoUrls(fromHtmlFull);
   }
 
   return fromDetail.length ? fromDetail : (thumbnail ? [thumbnail] : []);
@@ -3732,9 +3780,6 @@ function App() {
       const result = filters.statusCode === "0010" || filters.statusCode === "0011"
         ? await fetchOnbidResultLots(filters)
         : await fetchOnbidLots(filters);
-      if (filters.statusCode === "0010" || filters.statusCode === "0011") {
-        result.lots = await enrichResultLotsWithThumbnails(result.lots);
-      }
       if (filters.preserveSelectedId && !result.lots.some((lot) => lot.id === filters.preserveSelectedId)) {
         const normalizedId = normalizeLotId(filters.preserveSelectedId);
         const foundLot = await fetchLotByManagementNo(normalizedId, assetTypeFromLotId(normalizedId)).catch(() => null);
@@ -3744,6 +3789,11 @@ function App() {
         }
       }
       setData({ ...result, sample: false });
+      if (filters.statusCode === "0010" || filters.statusCode === "0011") {
+        enrichResultLotsWithThumbnails(result.lots, { quick: true }).then((enriched) => {
+          setData((prev) => (prev.sample ? prev : { ...prev, lots: enriched }));
+        }).catch(() => {});
+      }
       const nextSelectedId = preserveId
         || (result.lots.some((lot) => lot.id === selectedId) ? selectedId : "")
         || result.lots[0]?.id
