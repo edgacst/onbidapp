@@ -2645,6 +2645,7 @@ a {
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    scroll-padding-top: 58px;
   }
 }
 
@@ -3566,6 +3567,7 @@ a {
 
 .lot-detail-tab-panel {
   padding: 12px;
+  padding-bottom: max(80vh, 720px);
 }
 
 .lot-detail-tab-panel > .lot-detail-tab-section:first-child h3 {
@@ -5517,6 +5519,10 @@ a {
     border-radius: 0;
     background: transparent;
     margin-top: 4px;
+  }
+
+  .lot-detail-tab-panel {
+    padding-bottom: max(48vh, 420px);
   }
 
   .lot-detail-tab-section {

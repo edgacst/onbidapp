@@ -2174,6 +2174,8 @@ function LotDetailPanel({
   const tabsSentinelRef = useRef(null);
   const tabsBarRef = useRef(null);
   const scrollingToTab = useRef(false);
+  const lockedTabIdRef = useRef("");
+  const lockedTabUntilRef = useRef(0);
   const [tabsPinned, setTabsPinned] = useState(false);
   const [tabsBarHeight, setTabsBarHeight] = useState(0);
   const [isMobileView, setIsMobileView] = useState(() => (
@@ -2284,25 +2286,35 @@ function LotDetailPanel({
     const section = sectionRefs.current[tabId];
     if (!section) return false;
 
+    const heading = section.querySelector("h3") || section;
     const tabOffset = getDetailTabOffset();
     const scrollRoot = getDetailScrollRoot();
     if (scrollRoot) {
       const rootRect = scrollRoot.getBoundingClientRect();
-      const sectionRect = section.getBoundingClientRect();
-      const top = scrollRoot.scrollTop + (sectionRect.top - rootRect.top) - tabOffset;
-      scrollRoot.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      const headingRect = heading.getBoundingClientRect();
+      const maxScroll = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+      const top = Math.min(
+        Math.max(0, scrollRoot.scrollTop + (headingRect.top - rootRect.top) - tabOffset),
+        maxScroll,
+      );
+      scrollRoot.scrollTo({ top, behavior: "smooth" });
       return true;
     }
 
-    const top = section.getBoundingClientRect().top + window.scrollY - tabOffset;
-    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const top = Math.min(
+      Math.max(0, heading.getBoundingClientRect().top + window.scrollY - tabOffset),
+      maxScroll,
+    );
+    window.scrollTo({ top, behavior: "smooth" });
     return true;
   }
 
   function goToDetailTab(tabId) {
     setActiveTab(tabId);
     scrollingToTab.current = true;
-    const selectedTabId = tabId;
+    lockedTabIdRef.current = tabId;
+    lockedTabUntilRef.current = Date.now() + 1800;
 
     const tabButton = tabsBarRef.current?.querySelector(`[aria-controls="lot-detail-section-${tabId}"]`);
     tabButton?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
@@ -2314,10 +2326,11 @@ function LotDetailPanel({
       window.setTimeout(() => {
         runScroll();
         window.setTimeout(() => {
+          runScroll();
           scrollingToTab.current = false;
-          setActiveTab(selectedTabId);
-        }, 500);
-      }, 450);
+          setActiveTab(tabId);
+        }, 700);
+      }, 500);
     });
   }
 
@@ -2338,6 +2351,10 @@ function LotDetailPanel({
       observer = new IntersectionObserver(
         (entries) => {
           if (scrollingToTab.current) return;
+          if (Date.now() < lockedTabUntilRef.current && lockedTabIdRef.current) {
+            setActiveTab(lockedTabIdRef.current);
+            return;
+          }
           const hit = entries
             .filter((entry) => entry.isIntersecting)
             .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
@@ -2346,7 +2363,7 @@ function LotDetailPanel({
         },
         {
           root: scrollRoot,
-          rootMargin: `-${tabOffset}px 0px -40% 0px`,
+          rootMargin: `-${tabOffset}px 0px -65% 0px`,
           threshold: [0, 0.1, 0.25, 0.5],
         },
       );
