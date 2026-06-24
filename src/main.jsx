@@ -2045,6 +2045,7 @@ function LotDetailPanel({
   const detailItem = detail?.item || {};
   const showResult = isResultLot(lot) || resultFocus;
   const resultFields = showResult ? buildResultFields(lot) : null;
+  const isSoldResult = resultFields?.group === "sold";
   const reviewItems = useMemo(() => buildBidReviewItems(lot, pageMeta), [lot, pageMeta]);
   const [mediaMode, setMediaMode] = useState("photo");
   const [usePyeong, setUsePyeong] = useState(false);
@@ -2464,6 +2465,10 @@ function LotDetailPanel({
         </div>
       </div>
 
+      {isSoldResult ? (
+        <p className="lot-detail-sold-omit">낙찰된 물건이므로 이하 정보는 생략합니다.</p>
+      ) : (
+        <>
       <div ref={tabsSentinelRef} className="lot-detail-tabs-sentinel" aria-hidden="true" />
       {tabsPinned && tabsBarHeight > 0 && (
         <div className="lot-detail-tabs-spacer" style={{ height: tabsBarHeight }} aria-hidden="true" />
@@ -3066,6 +3071,8 @@ function LotDetailPanel({
         <a className="secondary-action" href={onbidUrl} target="_blank" rel="noreferrer" onClick={(event) => openExternalUrl(onbidUrl, event)}>온비드 상세 보기 <ExternalLink size={16} /></a>
         <button className="primary-action" type="button" onClick={openBidReview}>검토표 <ChevronRight size={18} /></button>
       </div>
+        </>
+      )}
     </article>
   );
 }

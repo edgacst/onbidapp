@@ -2915,6 +2915,18 @@ a {
   color: #d9485f;
 }
 
+.lot-detail-sold-omit {
+  margin: 20px 0 8px;
+  padding: 18px 16px;
+  border: 1px dashed #cfd8df;
+  border-radius: 10px;
+  background: #f7f9fb;
+  color: #5f7383;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .lot-detail-spec-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
