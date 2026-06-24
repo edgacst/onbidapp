@@ -4839,7 +4839,9 @@ function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark"><Gavel size={22} /></span>
+          <span className="brand-mark">
+            <img src="/icons/icon-192.png" alt="" width={40} height={40} />
+          </span>
           <div>
             <strong>에드가공매</strong>
             <small>온비드 실시간 분석</small>

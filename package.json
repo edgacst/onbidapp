@@ -22,6 +22,7 @@
     "logs": "powershell -NoProfile -Command \"Get-Content -Path logs/server.log -Tail 40 -Encoding utf8 -Wait\"",
     "prod": "node scripts/build.mjs && node scripts/restart-server.mjs",
     "refresh": "node scripts/build.mjs && node scripts/ensure-build.mjs",
+    "icons": "node scripts/generate-icons.mjs",
     "start:phone": "node scripts/build.mjs && node scripts/phone-launch.mjs --port 3000 --server prod --keep-alive"
   },
   "dependencies": {
@@ -33,5 +34,8 @@
     "react": "latest",
     "react-dom": "latest",
     "vite": "7.3.5"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.2"
   }
 }
