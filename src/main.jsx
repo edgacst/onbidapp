@@ -1494,20 +1494,17 @@ function extractOnbidHtmlFileMeta(html) {
 }
 
 function buildSoldLotPhotoUrls(html) {
-  const inline = extractOnbidHtmlPhotoUrls(html);
   const atch = extractOnbidHtmlAtchFileLstNo(html);
-  if (!atch) return dedupePhotoUrls(inline);
-
-  const built = Array.from({ length: 10 }, (_, index) => (
+  if (!atch) return [];
+  return Array.from({ length: 10 }, (_, index) => (
     buildOnbidImgDownloadUrl(atch, index + 1)
   ));
-  return dedupePhotoUrls([...built, ...inline]);
 }
 
 async function fetchOnbidHtmlPhotoGallery(lot, detail = null, options = {}) {
   if (!lot?.id) return [];
   const mode = options.quick ? "quick" : "full";
-  const cacheKey = `html-photos:v4:${mode}:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
+  const cacheKey = `html-photos:v5:${mode}:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
   if (htmlPhotoCache.has(cacheKey)) return htmlPhotoCache.get(cacheKey);
 
   const storePhotos = (photos) => {
@@ -1519,9 +1516,16 @@ async function fetchOnbidHtmlPhotoGallery(lot, detail = null, options = {}) {
     const html = await fetchOnbidDetailHtml(lot, detail);
     if (!html || html.length < 1000) return [];
 
-    const soldPhotos = buildSoldLotPhotoUrls(html);
-    if (soldPhotos.length) {
-      return storePhotos(options.quick ? soldPhotos.slice(0, 1) : soldPhotos);
+    const atch = extractOnbidHtmlAtchFileLstNo(html);
+    if (atch) {
+      let photos = [];
+      if (options.quick) {
+        const first = await probeFirstOnbidImg(atch);
+        if (first) photos = [first];
+      } else {
+        photos = await probeOnbidImgGallery(atch, 10);
+      }
+      if (photos.length) return storePhotos(photos);
     }
 
     const meta = extractOnbidHtmlFileMeta(html);
@@ -2344,6 +2348,7 @@ function LotDetailPanel({
                       next.add(key);
                       return next;
                     });
+                    setPhotoIndex((index) => Math.min(index, Math.max(0, displayPhotos.length - 2)));
                   }
                 }}
               />
