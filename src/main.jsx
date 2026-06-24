@@ -345,24 +345,48 @@ function parseAppHash(rawHash = "") {
   if (!trimmed) return { view: "home", selectedId: "" };
   if (appViews.includes(trimmed)) return { view: trimmed, selectedId: "" };
 
-  const lotCandidate = normalizeLotId(trimmed);
-  if (isOnbidLotId(lotCandidate)) {
-    return { view: "detail", selectedId: lotCandidate };
-  }
-
   const dashIndex = trimmed.indexOf("-");
-  if (dashIndex === -1) return { view: "home", selectedId: "" };
+  if (dashIndex !== -1) {
+    const viewToken = trimmed.slice(0, dashIndex);
+    const rest = decodeURIComponent(trimmed.slice(dashIndex + 1));
+    if (viewToken === "detail" && rest) {
+      const selectedId = normalizeLotId(rest);
+      return {
+        view: "detail",
+        selectedId: isOnbidLotId(selectedId) ? selectedId : rest,
+      };
+    }
+    if (appViews.includes(viewToken)) {
+      const selectedId = isOnbidLotId(normalizeLotId(rest)) ? normalizeLotId(rest) : "";
+      return { view: viewToken, selectedId };
+    }
+  }
 
-  const viewToken = trimmed.slice(0, dashIndex);
-  const rest = trimmed.slice(dashIndex + 1);
-  if (viewToken === "detail" && rest) {
-    const selectedId = normalizeLotId(decodeURIComponent(rest));
-    return { view: "detail", selectedId: isOnbidLotId(selectedId) ? selectedId : decodeURIComponent(rest) };
+  if (/^\d{4,5}-\d{4,5}-\d{3,6}$/.test(trimmed)) {
+    const selectedId = normalizeLotId(trimmed);
+    return { view: "detail", selectedId };
   }
-  if (appViews.includes(viewToken)) {
-    return { view: viewToken, selectedId: "" };
-  }
+
   return { view: "home", selectedId: "" };
+}
+
+function isDesktopLayout() {
+  return typeof window !== "undefined" && window.matchMedia("(min-width: 761px)").matches;
+}
+
+function resolveRouteForViewport(route) {
+  if (isDesktopLayout() && route.view === "detail" && route.selectedId) {
+    return { view: "search", selectedId: route.selectedId };
+  }
+  return route;
+}
+
+function buildAppHash(view, selectedId = "") {
+  if (!selectedId) return `#${view}`;
+  if (view === "detail" || view === "search") {
+    return `#${view}-${encodeURIComponent(selectedId)}`;
+  }
+  return `#${view}`;
 }
 
 class ErrorBoundary extends React.Component {
@@ -3724,7 +3748,7 @@ function BoardCommentSection({
 }
 
 function readInitialRoute() {
-  return parseAppHash(window.location.hash);
+  return resolveRouteForViewport(parseAppHash(window.location.hash));
 }
 
 function App() {
@@ -4126,7 +4150,8 @@ function App() {
   }, [members]);
 
   useEffect(() => {
-    const { view: initialView, selectedId: initialSelectedId } = parseAppHash(window.location.hash);
+    const parsedRoute = resolveRouteForViewport(parseAppHash(window.location.hash));
+    const { view: initialView, selectedId: initialSelectedId } = parsedRoute;
     const inferredAssetType = initialSelectedId ? assetTypeFromLotId(initialSelectedId) : homeAssetType;
 
     setView(initialView);
@@ -4142,7 +4167,7 @@ function App() {
     window.history.replaceState(
       { appView: initialView, selectedId: initialSelectedId },
       "",
-      initialSelectedId ? `#${initialView}-${encodeURIComponent(initialSelectedId)}` : `#${initialView}`,
+      buildAppHash(initialView, initialSelectedId),
     );
 
     const initialFilters = {
@@ -4162,7 +4187,7 @@ function App() {
     loadLots(initialFilters);
 
     function applyRouteFromLocation(state = {}, preferHash = false) {
-      const parsed = parseAppHash(window.location.hash);
+      const parsed = resolveRouteForViewport(parseAppHash(window.location.hash));
       const nextView = preferHash
         ? (parsed.view || state.appView || "home")
         : (state.appView || parsed.view || "home");
@@ -4384,8 +4409,6 @@ function App() {
         setHomeUsage("");
         setUsageCategoryId("");
       }
-      pushAppHistory("detail", parsed.lotId);
-      setView("detail");
       loadLots({
         keyword: parsed.lotId,
         propertyType,
@@ -4400,6 +4423,7 @@ function App() {
         assetType,
         preserveSelectedId: parsed.lotId,
       });
+      openDetail(parsed.lotId);
       return;
     }
 
@@ -4435,11 +4459,11 @@ function App() {
     setView("search");
   }
 
-  function pushAppHistory(nextView, nextSelectedId = selectedId) {
+  function pushAppHistory(nextView, nextSelectedId = "") {
     const state = { appView: nextView, selectedId: nextSelectedId || "" };
     const current = window.history.state || {};
     if (current.appView === state.appView && current.selectedId === state.selectedId) return;
-    const hash = state.selectedId ? `#${state.appView}-${encodeURIComponent(state.selectedId)}` : `#${state.appView}`;
+    const hash = buildAppHash(state.appView, state.selectedId);
     window.history.pushState(state, "", hash);
   }
 
@@ -4479,6 +4503,11 @@ function App() {
 
   function openDetail(id) {
     setSelectedId(id);
+    if (isDesktopLayout()) {
+      pushAppHistory("search", id);
+      setView("search");
+      return;
+    }
     pushAppHistory("detail", id);
     setView("detail");
     scrollPageToTop();
@@ -4516,9 +4545,8 @@ function App() {
         assetType,
         preserveSelectedId: parsed.lotId,
       };
-      pushAppHistory("detail", parsed.lotId);
-      setView("detail");
       loadLots(filters);
+      openDetail(parsed.lotId);
       return;
     }
 
