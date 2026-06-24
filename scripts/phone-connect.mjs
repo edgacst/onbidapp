@@ -63,11 +63,12 @@ async function main() {
   const deviceUrl = `http://127.0.0.1:${activePort}/`;
   const serverRunning = await isPortOpen(activePort);
 
-  console.log("\n=== 폰 USB 연결 ===");
+  console.log("\n=== 폰 USB 연결 (유선) ===");
   console.log(`adb:     ${adbPath}`);
   console.log(`기기:    ${deviceId}`);
   console.log(`reverse: ${ports.map((port) => `tcp:${port}`).join(", ")}`);
   console.log(`폰 URL:  ${deviceUrl}${serverRunning ? "" : "  ← 서버 미실행"}`);
+  console.log("※ USB 디버깅 중에는 Wi-Fi 주소(192.168.x.x)가 아니라 위 127.0.0.1 주소를 쓰세요.");
   console.log("PC 디버깅: Chrome → chrome://inspect → Remote devices");
 
   if (options.openDevice) {
@@ -77,10 +78,11 @@ async function main() {
 
   const lan = lanAddresses();
   if (lan.length) {
-    console.log("\n=== 폰 Wi-Fi (같은 공유기) ===");
+    console.log("\n=== 폰 Wi-Fi (무선, 같은 공유기) ===");
     for (const address of lan) {
       console.log(`폰 URL:  http://${address}:${activePort}/`);
     }
+    console.log("※ USB 케이블 연결·디버깅 중이면 Wi-Fi 주소 대신 위 USB(127.0.0.1) 주소를 쓰세요.");
     console.log("모바일 데이터 OFF · 연결 안 되면: npm run phone:firewall");
   }
 
