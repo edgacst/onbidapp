@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { loadEnvFiles } from "./load-env.js";
+import { isMailConfigured, sendWelcomeEmail } from "./send-mail.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 loadEnvFiles(root);
@@ -24,6 +25,27 @@ function rewriteOnbidApiPath(pathname) {
 }
 
 const app = express();
+app.use(express.json({ limit: "32kb" }));
+
+app.post("/api/members/welcome", async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const name = String(req.body?.name || "").trim() || email.split("@")[0] || "회원";
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ ok: false, message: "유효한 이메일이 필요합니다." });
+    return;
+  }
+  if (!isMailConfigured()) {
+    res.status(503).json({ ok: false, message: "메일 서버가 설정되지 않았습니다." });
+    return;
+  }
+  try {
+    await sendWelcomeEmail({ email, name });
+    res.json({ ok: true, message: "환영 메일을 발송했습니다." });
+  } catch (err) {
+    console.error("[welcome-mail]", err?.message || err);
+    res.status(500).json({ ok: false, message: "환영 메일 발송에 실패했습니다." });
+  }
+});
 
 function createSafeProxy(label, options) {
   return createProxyMiddleware({
@@ -92,7 +114,7 @@ if (existsSync(distPath)) {
       },
     }),
   );
-  app.get(/^(?!\/onbid-api|\/onbid-file).*/, (_req, res) => {
+  app.get(/^(?!\/onbid-api|\/onbid-file|\/api).*/, (_req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
@@ -136,6 +158,11 @@ function printServerUrls(port) {
     }
   } else {
     console.log("   (프론트 빌드 없음 — API 프록시만 동작)");
+  }
+  if (isMailConfigured()) {
+    console.log("   메일: 환영 메일 발송 설정됨");
+  } else {
+    console.log("   메일: SMTP 미설정 — 회원가입 환영 메일 비활성");
   }
 }
 

@@ -316,6 +316,21 @@ function upsertMemberRecord(members, record) {
   return next;
 }
 
+async function sendSignupWelcomeEmail(record) {
+  try {
+    const response = await fetch("/api/members/welcome", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: record.email, name: record.name }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const payload = await response.json().catch(() => ({}));
+    return { ok: response.ok, message: String(payload.message || "") };
+  } catch {
+    return { ok: false, message: "" };
+  }
+}
+
 function formatNoticeDate(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value || "");
@@ -3761,6 +3776,7 @@ function App() {
   const [members, setMembers] = useState(() => ensureMemberRegistry());
   const [memberQuery, setMemberQuery] = useState("");
   const [authError, setAuthError] = useState("");
+  const [serviceNotice, setServiceNotice] = useState("");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [boardSearch, setBoardSearch] = useState("");
   const [boardStatus, setBoardStatus] = useState("all");
@@ -4567,6 +4583,11 @@ function App() {
       setAuthForm({ name: "", email: "", password: "" });
       pushAppHistory(role === "admin" ? "admin" : "mypage");
       setView(role === "admin" ? "admin" : "mypage");
+      void sendSignupWelcomeEmail(record).then((result) => {
+        setServiceNotice(result.ok
+          ? "회원가입이 완료되었습니다. 입력하신 이메일로 환영 메일을 보냈습니다."
+          : "회원가입이 완료되었습니다.");
+      });
       return;
     }
 
@@ -5475,6 +5496,9 @@ function App() {
           </section>
         ) : view === "mypage" ? (
           <section className="service-page">
+            {serviceNotice && (
+              <p className="service-notice" role="status">{serviceNotice}</p>
+            )}
             <section className="service-card profile-card">
               <h2>{member ? `${member.name}님` : "비회원"}</h2>
               <p>{member ? member.email : "로그인하면 관심 물건과 질문 이력을 저장할 수 있습니다."}</p>
