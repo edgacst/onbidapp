@@ -25,9 +25,26 @@ function rewriteOnbidApiPath(pathname) {
 
 const app = express();
 
+function createSafeProxy(label, options) {
+  return createProxyMiddleware({
+    ...options,
+    on: {
+      ...options.on,
+      error(err, req, res) {
+        console.error(`[${label}]`, err?.message || err);
+        options.on?.error?.(err, req, res);
+        if (res && typeof res.writeHead === "function" && !res.headersSent) {
+          res.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end(`${label} 프록시 오류`);
+        }
+      },
+    },
+  });
+}
+
 app.use(
   "/onbid-api",
-  createProxyMiddleware({
+  createSafeProxy("onbid-api", {
     target: "https://apis.data.go.kr",
     changeOrigin: true,
     pathRewrite: rewriteOnbidApiPath,
@@ -36,7 +53,7 @@ app.use(
 
 app.use(
   "/onbid-file",
-  createProxyMiddleware({
+  createSafeProxy("onbid-file", {
     target: "https://www.onbid.co.kr",
     changeOrigin: true,
     pathRewrite: (pathname) => pathname.replace(/^\/onbid-file/, ""),
@@ -100,7 +117,7 @@ function lanAddresses() {
   return [...addresses];
 }
 
-app.listen(port, "0.0.0.0", () => {
+function printServerUrls(port) {
   console.log(`✅ 공매레이더 서버 http://localhost:${port}`);
   for (const address of lanAddresses()) {
     console.log(`   폰(Wi-Fi): http://${address}:${port}`);
@@ -120,4 +137,21 @@ app.listen(port, "0.0.0.0", () => {
   } else {
     console.log("   (프론트 빌드 없음 — API 프록시만 동작)");
   }
+}
+
+const server = app.listen(port, "0.0.0.0", () => {
+  printServerUrls(port);
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`\n❌ 포트 ${port}이(가) 이미 사용 중입니다. 서버가 이미 켜져 있을 수 있습니다.`);
+    printServerUrls(port);
+    console.error("\n그대로 접속해 보세요. 다시 시작하려면:");
+    console.error(`  Get-NetTCPConnection -LocalPort ${port} -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`);
+    console.error("  npm start");
+    process.exit(1);
+  }
+  console.error(err);
+  process.exit(1);
 });
