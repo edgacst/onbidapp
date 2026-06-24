@@ -1688,7 +1688,7 @@ async function resolveLotPhotosForDisplay(lot, detail) {
   const fromDetail = resolveLotPhotos(lot, detail);
   const thumbnail = extractPhotoUrl(lot?.thumbnail);
   const hasApiPhotos = Boolean(detail?.item?.potoUrlList && fromDetail.length);
-  const brokenThumb = thumbnail && /dnldFile\.do/.test(thumbnail);
+  const brokenThumb = Boolean(thumbnail && isResultLot(lot) && /dnldFile\.do/.test(thumbnail));
 
   if (hasApiPhotos) {
     const merged = thumbnail && !brokenThumb && !fromDetail.some((url) => photoIdentityKey(url) === photoIdentityKey(thumbnail))
@@ -1699,18 +1699,17 @@ async function resolveLotPhotosForDisplay(lot, detail) {
 
   if (fromDetail.length > 1) return dedupePhotoUrls(fromDetail);
 
-  const htmlQuick = !isResultLot(lot);
-  const fromHtml = await withTimeout(
-    fetchOnbidHtmlPhotoGallery(lot, detail, { quick: htmlQuick }),
-    GALLERY_RESOLVE_TIMEOUT_MS,
-    [],
+  const fromHtml = await fetchOnbidHtmlPhotoGallery(
+    lot,
+    detail,
+    { quick: false },
   );
   if (fromHtml.length) return dedupePhotoUrls(fromHtml);
 
   if (thumbnail && !brokenThumb) return [thumbnail];
 
   const fromAttachment = thumbnail && !brokenThumb
-    ? await withTimeout(probeGalleryFromThumbnail(thumbnail), PHOTO_PROBE_TIMEOUT_MS * 2, [])
+    ? await probeGalleryFromThumbnail(thumbnail)
     : [];
   const merged = [...new Set([...fromAttachment, ...fromDetail].filter(Boolean))];
   if (merged.length) return merged;
@@ -4119,20 +4118,34 @@ function App() {
     }
 
     let cancelled = false;
+    let resolved = false;
     const thumb = extractPhotoUrl(selected.thumbnail);
-    if (thumb) setGalleryPhotos([thumb]);
+    const brokenThumb = Boolean(thumb && isResultLot(selected) && /dnldFile\.do/.test(thumb));
+    if (thumb && !brokenThumb) setGalleryPhotos([thumb]);
     setGalleryLoading(true);
 
-    withTimeout(resolveLotPhotosForDisplay(selected, detail), GALLERY_RESOLVE_TIMEOUT_MS, thumb ? [thumb] : [])
+    const loadingGuard = window.setTimeout(() => {
+      if (!cancelled && !resolved) setGalleryLoading(false);
+    }, GALLERY_RESOLVE_TIMEOUT_MS);
+
+    resolveLotPhotosForDisplay(selected, detail)
       .then((photos) => {
-        if (!cancelled) setGalleryPhotos(photos.length ? photos : (thumb ? [thumb] : []));
+        if (cancelled) return;
+        resolved = true;
+        const safeThumb = thumb && !brokenThumb ? thumb : "";
+        setGalleryPhotos(photos.length ? photos : (safeThumb ? [safeThumb] : []));
       })
       .finally(() => {
-        if (!cancelled) setGalleryLoading(false);
+        if (!cancelled) {
+          resolved = true;
+          window.clearTimeout(loadingGuard);
+          setGalleryLoading(false);
+        }
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(loadingGuard);
       setGalleryLoading(false);
     };
   }, [selected?.id, selected?.thumbnail, selected?.conditionNo, detail, data.sample]);
