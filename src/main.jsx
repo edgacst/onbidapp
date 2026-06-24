@@ -51,10 +51,9 @@ const ONBID_RESULT_DETAIL_PATH = "/B010003/OnbidCltrBidRsltDtlSrvc2/getCltrBidRs
 const PAGE_SIZE = 50;
 const API_FETCH_TIMEOUT_MS = 25000;
 const PHOTO_PROBE_TIMEOUT_MS = 3000;
-const PHOTO_PROBE_MAX = 6;
+const PHOTO_PROBE_MAX = 10;
 const PAGE_META_TIMEOUT_MS = 20000;
 const GALLERY_RESOLVE_TIMEOUT_MS = 22000;
-const RESULT_THUMB_PREFETCH_LIMIT = 8;
 const detailResponseCache = new Map();
 const htmlPhotoCache = new Map();
 
@@ -1542,18 +1541,30 @@ async function fetchOnbidHtmlPhotoGallery(lot, detail = null, options = {}) {
 
 async function enrichResultLotsWithThumbnails(lots, options = {}) {
   const quick = options.quick !== false;
-  const limit = Number(options.limit) || RESULT_THUMB_PREFETCH_LIMIT;
-  const targets = lots.filter((lot) => !lot.thumbnail && isResultLot(lot)).slice(0, limit);
+  const limit = Number(options.limit) || PAGE_SIZE;
+  const priorityId = options.priorityId || "";
+  let targets = lots.filter((lot) => !lot.thumbnail && isResultLot(lot));
+  if (priorityId) {
+    const priorityIndex = targets.findIndex((lot) => lot.id === priorityId);
+    if (priorityIndex > 0) {
+      const [priority] = targets.splice(priorityIndex, 1);
+      targets.unshift(priority);
+    }
+  }
+  targets = targets.slice(0, limit);
   if (!targets.length) return lots;
 
   const updates = new Map();
-  const concurrency = 3;
+  const concurrency = 4;
   for (let index = 0; index < targets.length; index += concurrency) {
     const slice = targets.slice(index, index + concurrency);
     await Promise.all(slice.map(async (lot) => {
       const photos = await fetchOnbidHtmlPhotoGallery(lot, null, { quick }).catch(() => []);
       if (photos[0]) updates.set(lot.id, photos[0]);
     }));
+    if (updates.size && typeof options.onProgress === "function") {
+      options.onProgress(new Map(updates));
+    }
   }
   if (!updates.size) return lots;
   return lots.map((lot) => (
@@ -3933,7 +3944,23 @@ function App() {
       }
       setData({ ...result, sample: false });
       if (filters.statusCode === "0010" || filters.statusCode === "0011") {
-        enrichResultLotsWithThumbnails(result.lots, { quick: true }).then((enriched) => {
+        const mergeThumbnails = (updates) => {
+          setData((prev) => {
+            if (prev.sample) return prev;
+            return {
+              ...prev,
+              lots: prev.lots.map((lot) => (
+                updates.has(lot.id) ? { ...lot, thumbnail: updates.get(lot.id) } : lot
+              )),
+            };
+          });
+        };
+        enrichResultLotsWithThumbnails(result.lots, {
+          quick: true,
+          limit: PAGE_SIZE,
+          priorityId: preserveId || selectedId,
+          onProgress: mergeThumbnails,
+        }).then((enriched) => {
           setData((prev) => (prev.sample ? prev : { ...prev, lots: enriched }));
         }).catch(() => {});
       }
@@ -4166,6 +4193,17 @@ function App() {
         if (cancelled) return;
         if (photos.length) {
           setGalleryPhotos(photos);
+          if (isResultLot(selectedLot) && photos[0] && !selectedLot.thumbnail) {
+            setData((prev) => {
+              if (prev.sample) return prev;
+              return {
+                ...prev,
+                lots: prev.lots.map((lot) => (
+                  lot.id === selectedLot.id ? { ...lot, thumbnail: photos[0] } : lot
+                )),
+              };
+            });
+          }
         } else if (!seedPhotos.length) {
           setGalleryPhotos([]);
         }
