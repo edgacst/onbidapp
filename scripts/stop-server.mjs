@@ -1,5 +1,8 @@
-import { isPortOpen, killPort, serverPort } from "./server-utils.mjs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { isPortOpen, serverPort, stopServer } from "./server-utils.mjs";
 
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const port = serverPort();
 
 if (!(await isPortOpen(port))) {
@@ -8,7 +11,7 @@ if (!(await isPortOpen(port))) {
 }
 
 console.log(`포트 ${port} 서버 종료 중...`);
-killPort(port);
+stopServer(root, port);
 await new Promise((resolve) => setTimeout(resolve, 1500));
 
 if (await isPortOpen(port)) {

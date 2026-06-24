@@ -1,9 +1,20 @@
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
+import { dirname, join } from "node:path";
 
 export function serverPort() {
   return Number(process.env.PORT || 3000);
+}
+
+export function serverPaths(root) {
+  const logDir = join(root, "logs");
+  return {
+    logDir,
+    logPath: join(logDir, "server.log"),
+    pidPath: join(logDir, "server.pid"),
+  };
 }
 
 export function isPortOpen(targetPort) {
@@ -51,6 +62,48 @@ export function printRunningUrls(port) {
   console.log("   다시 시작하려면: npm run restart");
 }
 
+export function readServerPid(root) {
+  const { pidPath } = serverPaths(root);
+  if (!existsSync(pidPath)) return 0;
+  const pid = Number(String(readFileSync(pidPath, "utf8")).trim());
+  return Number.isFinite(pid) && pid > 0 ? pid : 0;
+}
+
+export function writeServerPid(root, pid) {
+  const { logDir, pidPath } = serverPaths(root);
+  mkdirSync(logDir, { recursive: true });
+  writeFileSync(pidPath, String(pid), "utf8");
+}
+
+export function clearServerPid(root) {
+  const { pidPath } = serverPaths(root);
+  if (existsSync(pidPath)) writeFileSync(pidPath, "", "utf8");
+}
+
+export function isProcessAlive(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function killProcess(pid) {
+  if (!pid) return false;
+  try {
+    if (process.platform === "win32") {
+      execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
+    } else {
+      process.kill(pid, "SIGTERM");
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function killPort(targetPort) {
   if (process.platform !== "win32") return;
   const cmd = `Get-NetTCPConnection -LocalPort ${targetPort} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`;
@@ -59,4 +112,45 @@ export function killPort(targetPort) {
   } catch {
     // ignore kill failures
   }
+}
+
+export function stopServer(root, port = serverPort()) {
+  const pid = readServerPid(root);
+  if (pid && isProcessAlive(pid)) {
+    killProcess(pid);
+  } else {
+    killPort(port);
+  }
+  clearServerPid(root);
+}
+
+export function spawnDetachedServer(root, port = serverPort()) {
+  const { logDir, logPath } = serverPaths(root);
+  mkdirSync(logDir, { recursive: true });
+  writeFileSync(logPath, `[${new Date().toISOString()}] server starting on port ${port}\n`, { flag: "a" });
+
+  const out = openSync(logPath, "a");
+  const err = openSync(logPath, "a");
+  const child = spawn("node", ["server/index.js"], {
+    cwd: root,
+    detached: true,
+    stdio: ["ignore", out, err],
+    windowsHide: true,
+    env: { ...process.env, PORT: String(port) },
+  });
+  closeSync(out);
+  closeSync(err);
+  child.unref();
+  writeServerPid(root, child.pid);
+  return child.pid;
+}
+
+export function spawnForegroundServer(root, port = serverPort()) {
+  return spawn("node", ["server/index.js"], {
+    cwd: root,
+    detached: false,
+    stdio: "inherit",
+    windowsHide: false,
+    env: { ...process.env, PORT: String(port) },
+  });
 }
