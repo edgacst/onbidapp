@@ -3433,6 +3433,25 @@ a {
   box-shadow: 0 4px 18px rgba(21, 27, 35, 0.1);
 }
 
+.lot-detail-panel--aside .lot-detail-tabs-bar,
+.lot-detail-panel--aside .lot-detail-tabs-bar.is-pinned {
+  position: sticky;
+  top: 0;
+  left: auto;
+  right: auto;
+  margin: 0 0 8px;
+  box-shadow: none;
+  z-index: 20;
+}
+
+.lot-detail-panel--aside .lot-detail-tabs-spacer {
+  display: none;
+}
+
+.lot-detail-panel--aside .lot-detail-tab-section {
+  scroll-margin-top: 58px;
+}
+
 .lot-detail-tabs-bar-inner {
   max-width: 1280px;
   margin: 0 auto;
@@ -3444,6 +3463,8 @@ a {
   flex-wrap: nowrap;
   gap: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   border-bottom: 0;
@@ -3456,6 +3477,7 @@ a {
 
 .lot-detail-tabs button {
   flex: 0 0 auto;
+  scroll-snap-align: center;
   min-height: 44px;
   padding: 0 11px;
   border: 0;

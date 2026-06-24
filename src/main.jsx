@@ -2229,6 +2229,11 @@ function LotDetailPanel({
   }, [lot?.id, showResult]);
 
   useEffect(() => {
+    if (layout === "aside") {
+      setTabsPinned(false);
+      return undefined;
+    }
+
     const sentinel = tabsSentinelRef.current;
     if (!sentinel) return undefined;
 
@@ -2256,7 +2261,7 @@ function LotDetailPanel({
       observer.disconnect();
       mobileMq.removeEventListener("change", onMobileChange);
     };
-  }, [lot?.id]);
+  }, [lot?.id, layout]);
 
   useEffect(() => {
     const bar = tabsBarRef.current;
@@ -2289,35 +2294,70 @@ function LotDetailPanel({
   function goToDetailTab(tabId) {
     setActiveTab(tabId);
     scrollingToTab.current = true;
+
+    const tabButton = tabsBarRef.current?.querySelector(`[aria-controls="lot-detail-section-${tabId}"]`);
+    tabButton?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+
+    const scrollToSection = () => {
+      const section = sectionRefs.current[tabId];
+      if (!section) return;
+      const tabOffset = (tabsBarRef.current?.offsetHeight || 0) + (layout === "page" ? 56 : 16);
+      const top = section.getBoundingClientRect().top + window.scrollY - tabOffset;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    };
+
     requestAnimationFrame(() => {
-      sectionRefs.current[tabId]?.scrollIntoView({ behavior: "smooth", block: "start" });
+      scrollToSection();
       window.setTimeout(() => {
+        scrollToSection();
         scrollingToTab.current = false;
-      }, 700);
+      }, 450);
     });
   }
 
   useEffect(() => {
-    const sections = visibleTabs
-      .map((tab) => sectionRefs.current[tab.id])
-      .filter(Boolean);
-    if (!sections.length) return undefined;
+    let cancelled = false;
+    const attachObserver = () => {
+      if (cancelled) return;
+      const sections = visibleTabs
+        .map((tab) => sectionRefs.current[tab.id])
+        .filter(Boolean);
+      if (!sections.length) return undefined;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (scrollingToTab.current) return;
-        const hit = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        const tabId = hit?.target?.getAttribute("data-tab-id");
-        if (tabId) setActiveTab(tabId);
-      },
-      { root: null, rootMargin: "-100px 0px -55% 0px", threshold: [0, 0.15, 0.4, 0.7] },
-    );
+      const tabOffset = (tabsBarRef.current?.offsetHeight || 52) + 16;
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (scrollingToTab.current) return;
+          const hit = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          const tabId = hit?.target?.getAttribute("data-tab-id");
+          if (tabId) setActiveTab(tabId);
+        },
+        { root: null, rootMargin: `-${tabOffset}px 0px -55% 0px`, threshold: [0, 0.15, 0.4, 0.7] },
+      );
 
-    sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
-  }, [lot?.id, pageMetaLoading, detailLoading, visibleTabs.length, isMobileView]);
+      sections.forEach((section) => observer.observe(section));
+      return observer;
+    };
+
+    let observer = attachObserver();
+    if (!observer) {
+      const retryId = window.setTimeout(() => {
+        observer = attachObserver();
+      }, 120);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(retryId);
+        observer?.disconnect();
+      };
+    }
+
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+    };
+  }, [lot?.id, pageMetaLoading, detailLoading, visibleTabs, isMobileView, layout, tabsBarHeight]);
 
   useEffect(() => {
     setPhotoIndex(0);
