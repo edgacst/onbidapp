@@ -7,6 +7,7 @@ import {
   printRunningUrls,
   serverPaths,
   serverPort,
+  setPrintRunningRoot,
   spawnDetachedServer,
   spawnForegroundServer,
   waitForPort,
@@ -15,6 +16,8 @@ import {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const port = serverPort();
 const foreground = process.argv.includes("--foreground");
+
+setPrintRunningRoot(root);
 
 async function main() {
   if (await isPortOpen(port)) {
@@ -43,7 +46,8 @@ async function main() {
     console.log(`   폰(Wi-Fi): http://${address}:${port}`);
   }
   console.log("   터미널을 닫아도 서버는 계속 실행됩니다.");
-  console.log("   로그: logs/server.log");
+  console.log("   상태 확인: npm run status");
+  console.log("   로그: npm run logs");
 }
 
 main().catch((error) => {

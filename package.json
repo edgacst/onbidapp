@@ -18,7 +18,8 @@
     "start:fg": "node scripts/start-server.mjs --foreground",
     "restart": "node scripts/restart-server.mjs",
     "stop": "node scripts/stop-server.mjs",
-    "logs": "powershell -NoProfile -Command \"Get-Content -Path logs/server.log -Tail 40 -Wait\"",
+    "status": "node scripts/status-server.mjs",
+    "logs": "powershell -NoProfile -Command \"Get-Content -Path logs/server.log -Tail 40 -Encoding utf8 -Wait\"",
     "prod": "node scripts/build.mjs && node scripts/restart-server.mjs",
     "refresh": "node scripts/build.mjs && node scripts/ensure-build.mjs",
     "start:phone": "node scripts/build.mjs && node scripts/phone-launch.mjs --port 3000 --server prod --keep-alive"

@@ -53,13 +53,21 @@ export function lanAddresses() {
 }
 
 export function printRunningUrls(port) {
-  console.log(`✅ 포트 ${port} 서버가 이미 실행 중입니다.`);
+  const pid = typeof printRunningUrls._root === "string" ? readServerPid(printRunningUrls._root) : 0;
+  const pidText = pid ? `PID ${pid}` : "백그라운드";
+  console.log(`✅ 서버가 이미 실행 중입니다 (${pidText}) — 종료된 것이 아닙니다.`);
+  console.log("   지금 브라우저에서 접속하세요:");
   console.log(`   PC: http://localhost:${port}`);
   for (const address of lanAddresses()) {
     console.log(`   폰(Wi-Fi): http://${address}:${port}`);
   }
   console.log(`   폰(USB): npm run phone → http://127.0.0.1:${port}`);
-  console.log("   다시 시작하려면: npm run restart");
+  console.log("   상태 확인: npm run status");
+  console.log("   다시 시작: npm run restart");
+}
+
+export function setPrintRunningRoot(root) {
+  printRunningUrls._root = root;
 }
 
 export function readServerPid(root) {
@@ -136,7 +144,12 @@ export function spawnDetachedServer(root, port = serverPort()) {
     detached: true,
     stdio: ["ignore", out, err],
     windowsHide: true,
-    env: { ...process.env, PORT: String(port) },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      PYTHONIOENCODING: "utf-8",
+      NODE_NO_WARNINGS: "1",
+    },
   });
   closeSync(out);
   closeSync(err);
@@ -151,6 +164,11 @@ export function spawnForegroundServer(root, port = serverPort()) {
     detached: false,
     stdio: "inherit",
     windowsHide: false,
-    env: { ...process.env, PORT: String(port) },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      PYTHONIOENCODING: "utf-8",
+      NODE_NO_WARNINGS: "1",
+    },
   });
 }
