@@ -239,6 +239,83 @@ function isAdminMember(member) {
   return member?.role === "admin";
 }
 
+const MEMBERS_STORAGE_KEY = "auctionMembers";
+const PRIMARY_ADMIN_EMAIL = "freecompr20@gmail.com";
+
+function normalizeMemberEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function formatMemberDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function readMemberRegistry() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(MEMBERS_STORAGE_KEY) || "[]");
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeMemberRegistry(members) {
+  localStorage.setItem(MEMBERS_STORAGE_KEY, JSON.stringify(members));
+}
+
+function createMemberRecord({ email, name, password, role = "member" }) {
+  return {
+    id: `member-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    email: normalizeMemberEmail(email),
+    name: String(name || "").trim() || normalizeMemberEmail(email).split("@")[0] || "회원",
+    password: String(password || ""),
+    role,
+    status: "active",
+    joinedAt: new Date().toISOString(),
+  };
+}
+
+function ensureMemberRegistry() {
+  const members = readMemberRegistry();
+  const adminEmail = normalizeMemberEmail(PRIMARY_ADMIN_EMAIL);
+  if (members.some((item) => normalizeMemberEmail(item.email) === adminEmail)) {
+    return members;
+  }
+  return members;
+}
+
+function isPrimaryAdminEmail(email) {
+  return normalizeMemberEmail(email) === normalizeMemberEmail(PRIMARY_ADMIN_EMAIL);
+}
+
+function memberToSession(record) {
+  return {
+    id: record.id,
+    name: record.name,
+    email: record.email,
+    joinedAt: record.joinedAt,
+    role: record.role,
+  };
+}
+
+function upsertMemberRecord(members, record) {
+  const email = normalizeMemberEmail(record.email);
+  const index = members.findIndex((item) => normalizeMemberEmail(item.email) === email);
+  if (index === -1) return [...members, record];
+  const next = [...members];
+  next[index] = { ...next[index], ...record, email };
+  return next;
+}
+
 function formatNoticeDate(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value || "");
@@ -3681,6 +3758,9 @@ function App() {
       return null;
     }
   });
+  const [members, setMembers] = useState(() => ensureMemberRegistry());
+  const [memberQuery, setMemberQuery] = useState("");
+  const [authError, setAuthError] = useState("");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [boardSearch, setBoardSearch] = useState("");
   const [boardStatus, setBoardStatus] = useState("all");
@@ -4024,6 +4104,10 @@ function App() {
     if (member) localStorage.setItem("auctionMember", JSON.stringify(member));
     else localStorage.removeItem("auctionMember");
   }, [member]);
+
+  useEffect(() => {
+    writeMemberRegistry(members);
+  }, [members]);
 
   useEffect(() => {
     const { view: initialView, selectedId: initialSelectedId } = parseAppHash(window.location.hash);
@@ -4452,14 +4536,110 @@ function App() {
 
   function submitAuth(event) {
     event.preventDefault();
-    const name = authForm.name.trim() || authForm.email.split("@")[0] || "회원";
-    const email = authForm.email.trim() || "guest@local.app";
-    const role = isAdminAccount(email, authForm.password) ? "admin" : "member";
-    setMember({ name, email, joinedAt: new Date().toISOString(), role });
+    setAuthError("");
+
+    const email = normalizeMemberEmail(authForm.email);
+    const password = String(authForm.password || "");
+    const name = authForm.name.trim() || email.split("@")[0] || "회원";
+
+    if (!email) {
+      setAuthError("이메일을 입력하세요.");
+      return;
+    }
+    if (!password) {
+      setAuthError("비밀번호를 입력하세요.");
+      return;
+    }
+
+    if (view === "signup") {
+      if (password.length < 6) {
+        setAuthError("비밀번호는 6자 이상이어야 합니다.");
+        return;
+      }
+      if (members.some((item) => normalizeMemberEmail(item.email) === email)) {
+        setAuthError("이미 가입된 이메일입니다.");
+        return;
+      }
+      const role = isAdminAccount(email, password) ? "admin" : "member";
+      const record = createMemberRecord({ email, name, password, role });
+      setMembers((current) => [...current, record]);
+      setMember(memberToSession(record));
+      setAuthForm({ name: "", email: "", password: "" });
+      pushAppHistory(role === "admin" ? "admin" : "mypage");
+      setView(role === "admin" ? "admin" : "mypage");
+      return;
+    }
+
+    if (isAdminAccount(email, password)) {
+      const record = createMemberRecord({
+        email,
+        name: name || "관리자",
+        password,
+        role: "admin",
+      });
+      setMembers((current) => upsertMemberRecord(current, record));
+      setMember(memberToSession(record));
+      setAuthForm({ name: "", email: "", password: "" });
+      pushAppHistory("admin");
+      setView("admin");
+      return;
+    }
+
+    const found = members.find((item) => normalizeMemberEmail(item.email) === email);
+    if (!found || found.password !== password) {
+      setAuthError("이메일 또는 비밀번호가 올바르지 않습니다.");
+      return;
+    }
+    if (found.status === "blocked") {
+      setAuthError("차단된 계정입니다. 관리자에게 문의하세요.");
+      return;
+    }
+
+    setMember(memberToSession(found));
     setAuthForm({ name: "", email: "", password: "" });
-    pushAppHistory(role === "admin" ? "admin" : "mypage");
-    setView(role === "admin" ? "admin" : "mypage");
+    pushAppHistory(found.role === "admin" ? "admin" : "mypage");
+    setView(found.role === "admin" ? "admin" : "mypage");
   }
+
+  function updateMemberRole(memberId, nextRole) {
+    if (!isAdminMember(member)) return;
+    setMembers((current) => current.map((item) => {
+      if (item.id !== memberId) return item;
+      if (isPrimaryAdminEmail(item.email) && nextRole !== "admin") return item;
+      return { ...item, role: nextRole };
+    }));
+    if (member?.id === memberId) {
+      setMember((current) => (current ? { ...current, role: nextRole } : current));
+    }
+  }
+
+  function toggleMemberStatus(memberId) {
+    if (!isAdminMember(member)) return;
+    setMembers((current) => current.map((item) => {
+      if (item.id !== memberId) return item;
+      if (isPrimaryAdminEmail(item.email) || member?.id === memberId) return item;
+      return { ...item, status: item.status === "blocked" ? "active" : "blocked" };
+    }));
+  }
+
+  function deleteMemberRecord(memberId) {
+    if (!isAdminMember(member)) return;
+    const target = members.find((item) => item.id === memberId);
+    if (!target || isPrimaryAdminEmail(target.email) || member?.id === memberId) return;
+    setMembers((current) => current.filter((item) => item.id !== memberId));
+  }
+
+  const filteredMembers = useMemo(() => {
+    const query = memberQuery.trim().toLowerCase();
+    const sorted = [...members].sort((a, b) => new Date(b.joinedAt) - new Date(a.joinedAt));
+    if (!query) return sorted;
+    return sorted.filter((item) => (
+      item.name.toLowerCase().includes(query)
+      || item.email.toLowerCase().includes(query)
+    ));
+  }, [members, memberQuery]);
+
+  const activeMemberCount = members.filter((item) => item.status !== "blocked").length;
 
   function openNoticeBoard() {
     pushAppHistory("notice");
@@ -5127,6 +5307,11 @@ function App() {
               <>
                 <section className="board-hero">
                   <article className="board-summary-card board-summary-primary">
+                    <span className="board-summary-label">회원</span>
+                    <strong>{activeMemberCount}명</strong>
+                    <p>차단 {members.filter((item) => item.status === "blocked").length}명</p>
+                  </article>
+                  <article className="board-summary-card">
                     <span className="board-summary-label">공지사항</span>
                     <strong>{notices.length}건</strong>
                     <p>고정 {notices.filter((notice) => notice.pinned).length}건</p>
@@ -5141,6 +5326,88 @@ function App() {
                     <strong>{saved.length}건</strong>
                     <p>현재 기기에 저장된 관심 물건 수입니다.</p>
                   </article>
+                </section>
+
+                <section className="service-card admin-member-panel">
+                  <div className="admin-panel-head">
+                    <h2>회원 관리</h2>
+                    <label className="admin-member-search">
+                      <Search size={16} />
+                      <input
+                        value={memberQuery}
+                        onChange={(event) => setMemberQuery(event.target.value)}
+                        placeholder="이름·이메일 검색"
+                      />
+                    </label>
+                  </div>
+                  <div className="admin-member-table-wrap">
+                    <table className="admin-member-table">
+                      <thead>
+                        <tr>
+                          <th>이름</th>
+                          <th>이메일</th>
+                          <th>역할</th>
+                          <th>상태</th>
+                          <th>가입일</th>
+                          <th>관리</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredMembers.length > 0 ? filteredMembers.map((item) => {
+                          const isSelf = member?.id === item.id
+                            || normalizeMemberEmail(member?.email) === normalizeMemberEmail(item.email);
+                          const isPrimary = isPrimaryAdminEmail(item.email);
+                          return (
+                            <tr key={item.id} className={item.status === "blocked" ? "is-blocked" : ""}>
+                              <td data-label="이름">{item.name}{isSelf ? " (나)" : ""}</td>
+                              <td data-label="이메일">{item.email}</td>
+                              <td data-label="역할">
+                                <select
+                                  value={item.role}
+                                  disabled={isPrimary}
+                                  onChange={(event) => updateMemberRole(item.id, event.target.value)}
+                                >
+                                  <option value="member">회원</option>
+                                  <option value="admin">관리자</option>
+                                </select>
+                              </td>
+                              <td data-label="상태">
+                                <span className={`admin-member-status ${item.status === "blocked" ? "blocked" : "active"}`}>
+                                  {item.status === "blocked" ? "차단" : "정상"}
+                                </span>
+                              </td>
+                              <td data-label="가입일">{formatMemberDate(item.joinedAt)}</td>
+                              <td data-label="관리">
+                                <div className="admin-member-actions">
+                                  <button
+                                    type="button"
+                                    className="plain-action"
+                                    disabled={isPrimary || isSelf}
+                                    onClick={() => toggleMemberStatus(item.id)}
+                                  >
+                                    {item.status === "blocked" ? "해제" : "차단"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="plain-action danger"
+                                    disabled={isPrimary || isSelf}
+                                    onClick={() => deleteMemberRecord(item.id)}
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }) : (
+                          <tr>
+                            <td colSpan={6}>등록된 회원이 없습니다.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="muted admin-member-note">회원 정보는 이 브라우저(localStorage)에 저장됩니다. 서버 DB 연동 전까지는 기기·브라우저마다 목록이 다를 수 있습니다.</p>
                 </section>
 
                 <section className="admin-panel-grid">
@@ -5200,7 +5467,8 @@ function App() {
                 <input value={authForm.password} onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))} placeholder="비밀번호" type="password" />
               </label>
               <button className="primary-action" type="submit">{view === "signup" ? "가입하기" : "로그인"}</button>
-              <button className="secondary-action" type="button" onClick={() => openView(view === "signup" ? "login" : "signup")}>
+              {authError && <p className="auth-error">{authError}</p>}
+              <button className="secondary-action" type="button" onClick={() => { setAuthError(""); openView(view === "signup" ? "login" : "signup"); }}>
                 {view === "signup" ? "이미 계정이 있어요" : "회원가입으로 이동"}
               </button>
             </form>
