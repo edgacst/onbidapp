@@ -53,7 +53,7 @@ const API_FETCH_TIMEOUT_MS = 25000;
 const PHOTO_PROBE_TIMEOUT_MS = 3000;
 const PHOTO_PROBE_MAX = 6;
 const PAGE_META_TIMEOUT_MS = 20000;
-const GALLERY_RESOLVE_TIMEOUT_MS = 12000;
+const GALLERY_RESOLVE_TIMEOUT_MS = 22000;
 const RESULT_THUMB_PREFETCH_LIMIT = 8;
 const detailResponseCache = new Map();
 const htmlPhotoCache = new Map();
@@ -1375,6 +1375,75 @@ function parseOnbidFileDownloadUrl(url) {
   }
 }
 
+function buildOnbidImgDownloadUrl(atchFileLstNo, atchSn, downloadImageKind = "ELGM_FILE_NM") {
+  const query = new URLSearchParams({
+    atchFileLstNo: String(atchFileLstNo),
+    atchSn: String(atchSn),
+    thnImgDownloadFlag: "false",
+    downloadImageKind,
+  });
+  return toOnbidFileProxy(`/op/cm/syc/filemng/filemngprcs/FileMngPrcsController/dnldImgFile.do?${query.toString()}`);
+}
+
+function extractOnbidHtmlAtchFileLstNo(html) {
+  return html.match(/id="atchFileLstNo"[^>]*value="([^"]+)"/)?.[1]
+    || html.match(/name="atchFileLstNo"[^>]*value="([^"]+)"/)?.[1]
+    || "";
+}
+
+function extractOnbidHtmlPhotoUrls(html) {
+  if (!html) return [];
+  const urls = [];
+  const seen = new Set();
+  for (const match of html.matchAll(/dnldImgFile\.do\?([^"'\\s]+)/g)) {
+    const path = `/op/cm/syc/filemng/filemngprcs/FileMngPrcsController/dnldImgFile.do?${match[1]}`;
+    const url = toOnbidFileProxy(path);
+    const key = photoIdentityKey(url);
+    if (!seen.has(key)) {
+      seen.add(key);
+      urls.push(url);
+    }
+  }
+  return urls;
+}
+
+function extractOnbidHtmlPhotoCount(html) {
+  const raw = html.match(/id="(?:picCnt|positCnt)"[^>]*value="([^"]*)"/)?.[1];
+  const count = Number(raw);
+  if (Number.isFinite(count) && count > 0) return count;
+  const inline = extractOnbidHtmlPhotoUrls(html);
+  if (inline.length) return inline.length;
+  return 0;
+}
+
+async function probeOnbidImgGallery(atchFileLstNo, maxCount = PHOTO_PROBE_MAX) {
+  if (!atchFileLstNo) return [];
+  const cacheKey = `img-gallery:${atchFileLstNo}:v1`;
+  if (galleryPhotoCache.has(cacheKey)) return galleryPhotoCache.get(cacheKey);
+
+  const photos = [];
+  const limit = Math.max(1, Math.min(maxCount, PHOTO_PROBE_MAX));
+  for (let atchSn = 1; atchSn <= limit; atchSn += 1) {
+    const url = buildOnbidImgDownloadUrl(atchFileLstNo, atchSn);
+    if (await probeOnbidPhotoUrl(url)) {
+      photos.push(url);
+      continue;
+    }
+    if (photos.length) break;
+  }
+
+  galleryPhotoCache.set(cacheKey, photos);
+  return photos;
+}
+
+async function probeFirstOnbidImg(atchFileLstNo) {
+  for (let atchSn = 1; atchSn <= PHOTO_PROBE_MAX; atchSn += 1) {
+    const url = buildOnbidImgDownloadUrl(atchFileLstNo, atchSn);
+    if (await probeOnbidPhotoUrl(url)) return url;
+  }
+  return "";
+}
+
 function buildOnbidFileDownloadUrl(meta, atchSn, downloadImageKind = "ORGNL_NM") {
   const query = new URLSearchParams({
     atchFileLstNo: meta.atchFileLstNo,
@@ -1426,6 +1495,32 @@ async function fetchOnbidHtmlPhotoGallery(lot, detail = null, options = {}) {
       htmlPhotoCache.set(cacheKey, []);
       return [];
     }
+
+    const inlinePhotos = dedupePhotoUrls(extractOnbidHtmlPhotoUrls(html));
+    const atchFileLstNo = extractOnbidHtmlAtchFileLstNo(html);
+
+    if (atchFileLstNo) {
+      const maxCount = extractOnbidHtmlPhotoCount(html) || PHOTO_PROBE_MAX;
+      let photos = [];
+      if (options.quick) {
+        const first = inlinePhotos[0] || await probeFirstOnbidImg(atchFileLstNo);
+        if (first) photos = [first];
+      } else {
+        photos = await probeOnbidImgGallery(atchFileLstNo, maxCount);
+        if (!photos.length && inlinePhotos.length) photos = inlinePhotos;
+      }
+      if (photos.length) {
+        htmlPhotoCache.set(cacheKey, photos);
+        return photos;
+      }
+    }
+
+    if (inlinePhotos.length) {
+      const photos = options.quick ? inlinePhotos.slice(0, 1) : inlinePhotos;
+      htmlPhotoCache.set(cacheKey, photos);
+      return photos;
+    }
+
     const meta = extractOnbidHtmlFileMeta(html);
     if (!meta) {
       htmlPhotoCache.set(cacheKey, []);
@@ -1593,28 +1688,31 @@ async function resolveLotPhotosForDisplay(lot, detail) {
   const fromDetail = resolveLotPhotos(lot, detail);
   const thumbnail = extractPhotoUrl(lot?.thumbnail);
   const hasApiPhotos = Boolean(detail?.item?.potoUrlList && fromDetail.length);
+  const brokenThumb = thumbnail && /dnldFile\.do/.test(thumbnail);
 
   if (hasApiPhotos) {
-    const merged = thumbnail && !fromDetail.some((url) => photoIdentityKey(url) === photoIdentityKey(thumbnail))
+    const merged = thumbnail && !brokenThumb && !fromDetail.some((url) => photoIdentityKey(url) === photoIdentityKey(thumbnail))
       ? [preferOriginalPhotoUrl(thumbnail), ...fromDetail]
       : fromDetail;
     return dedupePhotoUrls(merged);
   }
 
   if (fromDetail.length > 1) return dedupePhotoUrls(fromDetail);
-  if (thumbnail) return [thumbnail];
 
+  const htmlQuick = !isResultLot(lot);
   const fromHtml = await withTimeout(
-    fetchOnbidHtmlPhotoGallery(lot, detail, { quick: true }),
+    fetchOnbidHtmlPhotoGallery(lot, detail, { quick: htmlQuick }),
     GALLERY_RESOLVE_TIMEOUT_MS,
     [],
   );
   if (fromHtml.length) return dedupePhotoUrls(fromHtml);
 
-  const fromAttachment = thumbnail
+  if (thumbnail && !brokenThumb) return [thumbnail];
+
+  const fromAttachment = thumbnail && !brokenThumb
     ? await withTimeout(probeGalleryFromThumbnail(thumbnail), PHOTO_PROBE_TIMEOUT_MS * 2, [])
     : [];
-  const merged = [...new Set([thumbnail, ...fromAttachment, ...fromDetail].filter(Boolean))];
+  const merged = [...new Set([...fromAttachment, ...fromDetail].filter(Boolean))];
   if (merged.length) return merged;
 
   return fromDetail.length ? fromDetail : [];

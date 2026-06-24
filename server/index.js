@@ -65,7 +65,7 @@ app.use(
       delete proxyRes.headers["content-disposition"];
       proxyRes.headers["cache-control"] = "public, max-age=3600";
       const requestPath = req?.url || "";
-      if (requestPath.includes("dnldFile.do")) {
+      if (requestPath.includes("dnldFile.do") || requestPath.includes("dnldImgFile.do")) {
         const contentType = String(proxyRes.headers["content-type"] || "");
         if (!contentType.startsWith("image/")) {
           proxyRes.headers["content-type"] = "image/jpeg";
