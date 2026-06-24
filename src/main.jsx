@@ -47,10 +47,16 @@ const ONBID_CAR_DETAIL_PATH = "/B010003/OnbidCarDtlSrvc2/getCarDtlInf2";
 const ONBID_MOVABLE_LIST_PATH = "/B010003/OnbidMvastListSrvc2/getMvastCltrList2";
 const ONBID_MOVABLE_DETAIL_PATH = "/B010003/OnbidMvastDtlSrvc2/getMvastDtlInf2";
 const ONBID_RESULT_LIST_PATH = "/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsltList2";
+const ONBID_RESULT_DETAIL_PATH = "/B010003/OnbidCltrBidRsltDtlSrvc2/getCltrBidRsltDtl2";
 const PAGE_SIZE = 50;
 const API_FETCH_TIMEOUT_MS = 25000;
 const PHOTO_PROBE_TIMEOUT_MS = 8000;
 const detailResponseCache = new Map();
+const htmlPhotoCache = new Map();
+
+function readApiHeader(payload) {
+  return payload?.response?.header ?? payload?.header ?? payload?.result ?? null;
+}
 
 function apiFetch(url, options = {}) {
   return fetch(url, { ...options, signal: AbortSignal.timeout(API_FETCH_TIMEOUT_MS) });
@@ -1333,6 +1339,81 @@ function buildOnbidFileDownloadUrl(meta, atchSn, downloadImageKind = "ORGNL_NM")
   return toOnbidFileProxy(`${meta.path}?${query.toString()}`);
 }
 
+async function probeGalleryFromFileMeta(meta) {
+  if (!meta?.atchFileLstNo || !meta?.hashCrpsNo) return [];
+  const seedUrl = buildOnbidFileDownloadUrl(meta, 1, "ORGNL_NM");
+  return probeGalleryFromThumbnail(seedUrl);
+}
+
+function extractOnbidHtmlFileMeta(html) {
+  if (!html || html.length < 1000) return null;
+  if (html.includes("종결된") && html.length < 5000) return null;
+
+  const atchFileLstNo = html.match(/id="atchFileLstNo"[^>]*value="([^"]+)"/)?.[1]
+    || html.match(/name="atchFileLstNo"[^>]*value="([^"]+)"/)?.[1];
+  if (!atchFileLstNo) return null;
+
+  let hashCrpsNo = html.match(/id="hashCrpsNo"[^>]*value="([^"]+)"/)?.[1]
+    || html.match(/name="hashCrpsNo"[^>]*value="([^"]+)"/)?.[1];
+  if (!hashCrpsNo) {
+    const pdfMatch = html.match(/fn_chkPdfRead\('(\d+)','(\d+)','[^']*','([^']+)','([^']+)'/);
+    if (pdfMatch) hashCrpsNo = pdfMatch[4];
+  }
+  if (!hashCrpsNo) return null;
+
+  return {
+    atchFileLstNo,
+    hashCrpsNo,
+    path: "/op/cm/syc/filemng/filemngprcs/FileMngPrcsController/dnldFile.do",
+  };
+}
+
+async function fetchOnbidHtmlPhotoGallery(lot, detail = null) {
+  if (!lot?.id) return [];
+  const cacheKey = `html-photos:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
+  if (htmlPhotoCache.has(cacheKey)) return htmlPhotoCache.get(cacheKey);
+
+  const url = onbidDetailPageProxyUrl(lot, detail);
+  if (!url) {
+    htmlPhotoCache.set(cacheKey, []);
+    return [];
+  }
+
+  try {
+    const response = await apiFetch(url);
+    const html = await response.text();
+    if (!response.ok || html.length < 1000) {
+      htmlPhotoCache.set(cacheKey, []);
+      return [];
+    }
+    const meta = extractOnbidHtmlFileMeta(html);
+    const photos = meta ? await probeGalleryFromFileMeta(meta) : [];
+    htmlPhotoCache.set(cacheKey, photos);
+    return photos;
+  } catch {
+    htmlPhotoCache.set(cacheKey, []);
+    return [];
+  }
+}
+
+async function enrichResultLotsWithThumbnails(lots, concurrency = 4) {
+  const targets = lots.filter((lot) => !lot.thumbnail && isResultLot(lot));
+  if (!targets.length) return lots;
+
+  const updates = new Map();
+  for (let index = 0; index < targets.length; index += concurrency) {
+    const slice = targets.slice(index, index + concurrency);
+    await Promise.all(slice.map(async (lot) => {
+      const photos = await fetchOnbidHtmlPhotoGallery(lot).catch(() => []);
+      if (photos[0]) updates.set(lot.id, photos[0]);
+    }));
+  }
+  if (!updates.size) return lots;
+  return lots.map((lot) => (
+    updates.has(lot.id) ? { ...lot, thumbnail: updates.get(lot.id) } : lot
+  ));
+}
+
 const galleryPhotoCache = new Map();
 
 function isImageMagic(bytes) {
@@ -1469,6 +1550,11 @@ async function resolveLotPhotosForDisplay(lot, detail) {
   const fromAttachment = thumbnail ? await probeGalleryFromThumbnail(thumbnail) : [];
   const merged = [...new Set([thumbnail, ...fromAttachment, ...fromDetail].filter(Boolean))];
   if (merged.length) return merged;
+
+  const fromHtml = await fetchOnbidHtmlPhotoGallery(lot, detail);
+  if (fromHtml.length) {
+    return dedupePhotoUrls(fromHtml);
+  }
 
   return fromDetail.length ? fromDetail : (thumbnail ? [thumbnail] : []);
 }
@@ -3099,7 +3185,7 @@ async function fetchOnbidResultLots(filters) {
   }
 
   const payload = JSON.parse(text);
-  const header = payload?.response?.header ?? payload?.header;
+  const header = readApiHeader(payload);
   if (header?.resultCode && header.resultCode !== "00") {
     throw new Error(`${header.resultCode} ${header.resultMsg ?? "입찰결과목록 API 오류"}`);
   }
@@ -3121,12 +3207,40 @@ async function fetchOnbidCount(filters, statusCode = "") {
   return result.totalCount || result.lots.length || 0;
 }
 
+async function fetchOnbidResultDetail(lot) {
+  if (!lot?.id) return null;
+  const params = new URLSearchParams({
+    resultType: "json",
+    cltrMngNo: lot.id,
+  });
+  if (lot.conditionNo) params.set("pbctCdtnNo", String(lot.conditionNo));
+
+  const response = await apiFetch(`${API_BASE}${ONBID_RESULT_DETAIL_PATH}?${params.toString()}`);
+  if (response.status === 403) return null;
+  const text = await response.text();
+  if (!response.ok) return null;
+
+  const payload = JSON.parse(text);
+  const header = readApiHeader(payload);
+  if (header?.resultCode && header.resultCode !== "00") return null;
+
+  return normalizeDetail(payload);
+}
+
 async function fetchOnbidDetail(filters, lot) {
   if (!lot?.id) return null;
   const assetType = lot.assetType || filters.assetType;
   const cacheKey = `${assetType}:${lot.id}:${lot.conditionNo || ""}:${lot.onbidNo || ""}:${lot.pbctNo || ""}`;
   if (detailResponseCache.has(cacheKey)) {
     return detailResponseCache.get(cacheKey);
+  }
+
+  if (isResultLot(lot)) {
+    const resultDetail = await fetchOnbidResultDetail(lot).catch(() => null);
+    if (resultDetail?.photos?.length || resultDetail?.item?.cltrMngNo) {
+      detailResponseCache.set(cacheKey, resultDetail);
+      return resultDetail;
+    }
   }
 
   const detailPath = detailPathsByAssetType[assetType] || ONBID_DETAIL_PATH;
@@ -3149,8 +3263,13 @@ async function fetchOnbidDetail(filters, lot) {
   }
 
   const payload = JSON.parse(text);
-  const header = payload?.response?.header ?? payload?.header;
+  const header = readApiHeader(payload);
   if (header?.resultCode && header.resultCode !== "00") {
+    if (header.resultCode === "03" && isResultLot(lot)) {
+      const emptyDetail = { item: {}, photos: [], thumbnail: "" };
+      detailResponseCache.set(cacheKey, emptyDetail);
+      return emptyDetail;
+    }
     throw new Error(`${header.resultCode} ${header.resultMsg ?? "상세 API 오류"}`);
   }
   const normalized = normalizeDetail(payload);
@@ -3613,6 +3732,9 @@ function App() {
       const result = filters.statusCode === "0010" || filters.statusCode === "0011"
         ? await fetchOnbidResultLots(filters)
         : await fetchOnbidLots(filters);
+      if (filters.statusCode === "0010" || filters.statusCode === "0011") {
+        result.lots = await enrichResultLotsWithThumbnails(result.lots);
+      }
       if (filters.preserveSelectedId && !result.lots.some((lot) => lot.id === filters.preserveSelectedId)) {
         const normalizedId = normalizeLotId(filters.preserveSelectedId);
         const foundLot = await fetchLotByManagementNo(normalizedId, assetTypeFromLotId(normalizedId)).catch(() => null);
