@@ -1214,22 +1214,34 @@ const onbidPageMetaCache = new Map();
 const onbidDetailHtmlCache = new Map();
 
 async function fetchOnbidDetailHtml(lot, detail = null) {
-  const cacheKey = `html:${lot?.id}:${lot?.conditionNo || ""}:${lot?.pbctNo || ""}`;
-  if (onbidDetailHtmlCache.has(cacheKey)) return onbidDetailHtmlCache.get(cacheKey);
+  const cacheKey = `html:v2:${lot?.id}:${lot?.conditionNo || ""}:${lot?.pbctNo || ""}`;
+  const cached = onbidDetailHtmlCache.get(cacheKey);
+  if (cached) return cached;
 
-  const url = onbidDetailPageProxyUrl(lot, detail);
+  let url = onbidDetailPageProxyUrl(lot, detail);
   if (!url) {
-    onbidDetailHtmlCache.set(cacheKey, "");
-    return "";
+    const fields = pickOnbidLinkFields(lot, detail);
+    if (fields.onbidNo && fields.conditionNo && fields.pbctNo && fields.noticeNo) {
+      const screen = onbidDetailScreen(fields);
+      const query = new URLSearchParams({
+        cltrPrptDivCd: screen.cltrPrptDivCd,
+        cltrScrnGrpCd: screen.cltrScrnGrpCd,
+        onbidCltrno: String(fields.onbidNo),
+        onbidPbancNo: String(fields.noticeNo),
+        pbctCdtnNo: String(fields.conditionNo),
+        pbctNo: String(fields.pbctNo),
+      });
+      url = toOnbidFileProxy(`/op/cltrpbancinf/cltrdtl/CltrDtlController/mvmnCltrDtl.do?${query.toString()}`);
+    }
   }
+  if (!url) return "";
 
   try {
     const response = await apiFetch(url);
     const html = response.ok ? await response.text() : "";
-    onbidDetailHtmlCache.set(cacheKey, html);
+    if (html.length >= 1000) onbidDetailHtmlCache.set(cacheKey, html);
     return html;
   } catch {
-    onbidDetailHtmlCache.set(cacheKey, "");
     return "";
   }
 }
@@ -1481,10 +1493,21 @@ function extractOnbidHtmlFileMeta(html) {
   };
 }
 
+function buildSoldLotPhotoUrls(html) {
+  const inline = extractOnbidHtmlPhotoUrls(html);
+  const atch = extractOnbidHtmlAtchFileLstNo(html);
+  if (!atch) return dedupePhotoUrls(inline);
+
+  const built = Array.from({ length: 10 }, (_, index) => (
+    buildOnbidImgDownloadUrl(atch, index + 1)
+  ));
+  return dedupePhotoUrls([...inline, ...built]);
+}
+
 async function fetchOnbidHtmlPhotoGallery(lot, detail = null, options = {}) {
   if (!lot?.id) return [];
   const mode = options.quick ? "quick" : "full";
-  const cacheKey = `html-photos:v2:${mode}:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
+  const cacheKey = `html-photos:v3:${mode}:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
   if (htmlPhotoCache.has(cacheKey)) return htmlPhotoCache.get(cacheKey);
 
   const storePhotos = (photos) => {
@@ -1496,24 +1519,9 @@ async function fetchOnbidHtmlPhotoGallery(lot, detail = null, options = {}) {
     const html = await fetchOnbidDetailHtml(lot, detail);
     if (!html || html.length < 1000) return [];
 
-    const inlinePhotos = dedupePhotoUrls(extractOnbidHtmlPhotoUrls(html));
-    const atchFileLstNo = extractOnbidHtmlAtchFileLstNo(html);
-
-    if (atchFileLstNo) {
-      const maxCount = extractOnbidHtmlPhotoCount(html) || PHOTO_PROBE_MAX;
-      let photos = [];
-      if (options.quick) {
-        const first = inlinePhotos[0] || await probeFirstOnbidImg(atchFileLstNo);
-        if (first) photos = [first];
-      } else {
-        photos = await probeOnbidImgGallery(atchFileLstNo, maxCount);
-        if (!photos.length && inlinePhotos.length) photos = inlinePhotos;
-      }
-      if (photos.length) return storePhotos(photos);
-    }
-
-    if (inlinePhotos.length) {
-      return storePhotos(options.quick ? inlinePhotos.slice(0, 1) : inlinePhotos);
+    const soldPhotos = buildSoldLotPhotoUrls(html);
+    if (soldPhotos.length) {
+      return storePhotos(options.quick ? soldPhotos.slice(0, 1) : soldPhotos);
     }
 
     const meta = extractOnbidHtmlFileMeta(html);
@@ -1570,15 +1578,19 @@ async function probeOnbidPhotoUrl(url) {
     if (contentType.includes("text/html")) return false;
 
     const reader = response.body?.getReader();
-    if (!reader) return false;
+    if (!reader) {
+      const blob = await response.blob();
+      return blob.size > 5000;
+    }
 
     const { value } = await reader.read();
     await reader.cancel().catch(() => {});
 
-    if (!value || value.length < 4 || !isImageMagic(value)) return false;
+    if (!value || value.length < 4) return false;
+    if (isImageMagic(value)) return true;
 
     const size = Number(response.headers.get("content-length") || 0);
-    return size > 10000 || value.length >= 4;
+    return size > 5000 || value.length > 5000;
   } catch {
     return false;
   }
@@ -1680,6 +1692,11 @@ async function resolveLotPhotosForDisplay(lot, detail) {
   const thumbnail = extractPhotoUrl(lot?.thumbnail);
   const hasApiPhotos = Boolean(detail?.item?.potoUrlList && fromDetail.length);
   const brokenThumb = Boolean(thumbnail && isResultLot(lot) && /dnldFile\.do/.test(thumbnail));
+
+  if (isResultLot(lot)) {
+    const fromHtml = await fetchOnbidHtmlPhotoGallery(lot, detail, { quick: false });
+    if (fromHtml.length) return dedupePhotoUrls(fromHtml);
+  }
 
   if (hasApiPhotos) {
     const merged = thumbnail && !brokenThumb && !fromDetail.some((url) => photoIdentityKey(url) === photoIdentityKey(thumbnail))
@@ -2019,6 +2036,7 @@ function LotDetailPanel({
   const [activeTab, setActiveTab] = useState(showResult ? "result" : "spec");
   const [photoIndex, setPhotoIndex] = useState(0);
   const [photoFallbacks, setPhotoFallbacks] = useState({});
+  const [brokenPhotoKeys, setBrokenPhotoKeys] = useState(() => new Set());
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewChecks, setReviewChecks] = useState({});
   const reviewRef = useRef(null);
@@ -2169,7 +2187,16 @@ function LotDetailPanel({
     return () => observer.disconnect();
   }, [lot?.id, pageMetaLoading, detailLoading, visibleTabs.length, isMobileView]);
 
-  const displayPhotos = dedupePhotos(photos);
+  useEffect(() => {
+    setPhotoIndex(0);
+    setPhotoFallbacks({});
+    setBrokenPhotoKeys(new Set());
+  }, [lot?.id, photos]);
+
+  const displayPhotos = useMemo(
+    () => dedupePhotos(photos).filter((url) => !brokenPhotoKeys.has(photoIdentityKey(url))),
+    [photos, brokenPhotoKeys],
+  );
   const photoCount = displayPhotos.length;
   const currentPhoto = photoFallbacks[photoIndex] || displayPhotos[photoIndex] || "";
   const propertyTag = raw.prptDivNm || lot.tags[0] || "공매";
@@ -2307,6 +2334,16 @@ function LotDetailPanel({
                   const fallback = photoDisplayFallback(original);
                   if (fallback && photoFallbacks[photoIndex] !== fallback) {
                     setPhotoFallbacks((current) => ({ ...current, [photoIndex]: fallback }));
+                    return;
+                  }
+                  if (original) {
+                    const key = photoIdentityKey(original);
+                    setBrokenPhotoKeys((current) => {
+                      if (current.has(key)) return current;
+                      const next = new Set(current);
+                      next.add(key);
+                      return next;
+                    });
                   }
                 }}
               />
@@ -4141,7 +4178,7 @@ function App() {
     selectedLot?.conditionNo,
     selectedLot?.onbidNo,
     selectedLot?.pbctNo,
-    detail?.item?.cltrMngNo,
+    selectedLot?.noticeNo,
     data.sample,
   ]);
 
