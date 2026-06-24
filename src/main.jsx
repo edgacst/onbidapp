@@ -1407,7 +1407,7 @@ function extractOnbidHtmlPhotoUrls(html) {
   if (!html) return [];
   const urls = [];
   const seen = new Set();
-  for (const match of html.matchAll(/dnldImgFile\.do\?([^"'\\s]+)/g)) {
+  for (const match of html.matchAll(/dnldImgFile\.do\?([^"'\s]+)/g)) {
     const path = `/op/cm/syc/filemng/filemngprcs/FileMngPrcsController/dnldImgFile.do?${match[1]}`;
     const url = toOnbidFileProxy(path);
     const key = photoIdentityKey(url);
@@ -1501,13 +1501,13 @@ function buildSoldLotPhotoUrls(html) {
   const built = Array.from({ length: 10 }, (_, index) => (
     buildOnbidImgDownloadUrl(atch, index + 1)
   ));
-  return dedupePhotoUrls([...inline, ...built]);
+  return dedupePhotoUrls([...built, ...inline]);
 }
 
 async function fetchOnbidHtmlPhotoGallery(lot, detail = null, options = {}) {
   if (!lot?.id) return [];
   const mode = options.quick ? "quick" : "full";
-  const cacheKey = `html-photos:v3:${mode}:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
+  const cacheKey = `html-photos:v4:${mode}:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
   if (htmlPhotoCache.has(cacheKey)) return htmlPhotoCache.get(cacheKey);
 
   const storePhotos = (photos) => {
