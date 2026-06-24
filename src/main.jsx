@@ -2169,6 +2169,7 @@ function LotDetailPanel({
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewChecks, setReviewChecks] = useState({});
   const reviewRef = useRef(null);
+  const panelRootRef = useRef(null);
   const sectionRefs = useRef({});
   const tabsSentinelRef = useRef(null);
   const tabsBarRef = useRef(null);
@@ -2179,30 +2180,35 @@ function LotDetailPanel({
     typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches
   ));
 
-  const detailTabs = [
-    ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
-    { id: "spec", label: "세부정보" },
-    { id: "seized", label: "압류재산정보" },
-    { id: "bid-info", label: "입찰정보" },
-    { id: "bid-method", label: "입찰방법" },
-    { id: "bid-limit", label: "입찰제한정보" },
-    { id: "documents", label: "제출서류" },
-    { id: "bid-schedule", label: "입찰일정및장소" },
-    { id: "payment", label: "납부기한안내" },
-    { id: "prev-bids", label: "이전입찰내역" },
-    { id: "market", label: "인근시세및낙찰사례" },
-    { id: "market-stats", label: "인근낙찰통계" },
-  ];
+  const visibleTabs = useMemo(() => {
+    const detailTabs = [
+      ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
+      { id: "spec", label: "세부정보" },
+      { id: "seized", label: "압류재산정보" },
+      { id: "bid-info", label: "입찰정보" },
+      { id: "bid-method", label: "입찰방법" },
+      { id: "bid-limit", label: "입찰제한정보" },
+      { id: "documents", label: "제출서류" },
+      { id: "bid-schedule", label: "입찰일정및장소" },
+      { id: "payment", label: "납부기한안내" },
+      { id: "prev-bids", label: "이전입찰내역" },
+      { id: "market", label: "인근시세및낙찰사례" },
+      { id: "market-stats", label: "인근낙찰통계" },
+    ];
+    const mobileTabs = [
+      ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
+      { id: "spec", label: "세부정보" },
+      { id: "seized", label: "압류재산" },
+      { id: "bid-info", label: "입찰정보" },
+      { id: "market", label: "인근시세" },
+    ];
+    return isMobileView ? mobileTabs : detailTabs;
+  }, [isMobileView, showResult]);
 
-  const mobileTabs = [
-    ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
-    { id: "spec", label: "세부정보" },
-    { id: "seized", label: "압류재산" },
-    { id: "bid-info", label: "입찰정보" },
-    { id: "market", label: "인근시세" },
-  ];
-
-  const visibleTabs = isMobileView ? mobileTabs : detailTabs;
+  const visibleTabIds = useMemo(
+    () => visibleTabs.map((tab) => tab.id).join("|"),
+    [visibleTabs],
+  );
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 760px)");
@@ -2288,6 +2294,42 @@ function LotDetailPanel({
 
   const reviewDoneCount = reviewItems.filter((item) => reviewChecks[item.id]).length;
 
+  function getDetailScrollRoot() {
+    if (layout === "aside") {
+      return panelRootRef.current?.closest(".detail-panel") || panelRootRef.current;
+    }
+    return null;
+  }
+
+  function getDetailTabOffset() {
+    const tabBarHeight = tabsBarRef.current?.offsetHeight || 52;
+    if (layout === "aside") return tabBarHeight + 12;
+    if (isMobileView) {
+      const mobileHeader = document.querySelector(".detail-mobile-header")?.offsetHeight || 48;
+      return tabBarHeight + mobileHeader + 8;
+    }
+    return tabBarHeight + 20;
+  }
+
+  function scrollDetailSection(tabId) {
+    const section = sectionRefs.current[tabId];
+    if (!section) return false;
+
+    const tabOffset = getDetailTabOffset();
+    const scrollRoot = getDetailScrollRoot();
+    if (scrollRoot) {
+      const rootRect = scrollRoot.getBoundingClientRect();
+      const sectionRect = section.getBoundingClientRect();
+      const top = scrollRoot.scrollTop + (sectionRect.top - rootRect.top) - tabOffset;
+      scrollRoot.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      return true;
+    }
+
+    const top = section.getBoundingClientRect().top + window.scrollY - tabOffset;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    return true;
+  }
+
   function goToDetailTab(tabId) {
     setActiveTab(tabId);
     scrollingToTab.current = true;
@@ -2295,34 +2337,32 @@ function LotDetailPanel({
     const tabButton = tabsBarRef.current?.querySelector(`[aria-controls="lot-detail-section-${tabId}"]`);
     tabButton?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
 
-    const scrollToSection = () => {
-      const section = sectionRefs.current[tabId];
-      if (!section) return;
-      const tabOffset = (tabsBarRef.current?.offsetHeight || 0) + (layout === "page" ? 56 : 16);
-      const top = section.getBoundingClientRect().top + window.scrollY - tabOffset;
-      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-    };
-
     requestAnimationFrame(() => {
-      scrollToSection();
+      scrollDetailSection(tabId);
       window.setTimeout(() => {
-        scrollToSection();
-        scrollingToTab.current = false;
-      }, 450);
+        scrollDetailSection(tabId);
+        window.setTimeout(() => {
+          scrollingToTab.current = false;
+        }, 400);
+      }, 500);
     });
   }
 
   useEffect(() => {
     let cancelled = false;
+    let retryId = 0;
+    let observer;
+
     const attachObserver = () => {
-      if (cancelled) return;
+      if (cancelled) return undefined;
       const sections = visibleTabs
         .map((tab) => sectionRefs.current[tab.id])
         .filter(Boolean);
       if (!sections.length) return undefined;
 
-      const tabOffset = (tabsBarRef.current?.offsetHeight || 52) + 16;
-      const observer = new IntersectionObserver(
+      const tabOffset = getDetailTabOffset();
+      const scrollRoot = getDetailScrollRoot();
+      observer = new IntersectionObserver(
         (entries) => {
           if (scrollingToTab.current) return;
           const hit = entries
@@ -2331,30 +2371,33 @@ function LotDetailPanel({
           const tabId = hit?.target?.getAttribute("data-tab-id");
           if (tabId) setActiveTab(tabId);
         },
-        { root: null, rootMargin: `-${tabOffset}px 0px -55% 0px`, threshold: [0, 0.15, 0.4, 0.7] },
+        {
+          root: scrollRoot,
+          rootMargin: `-${tabOffset}px 0px -40% 0px`,
+          threshold: [0, 0.1, 0.25, 0.5],
+        },
       );
 
       sections.forEach((section) => observer.observe(section));
       return observer;
     };
 
-    let observer = attachObserver();
-    if (!observer) {
-      const retryId = window.setTimeout(() => {
-        observer = attachObserver();
-      }, 120);
-      return () => {
-        cancelled = true;
-        window.clearTimeout(retryId);
-        observer?.disconnect();
-      };
-    }
+    const scheduleAttach = (attempt = 0) => {
+      observer?.disconnect();
+      observer = attachObserver();
+      if (!observer && attempt < 8) {
+        retryId = window.setTimeout(() => scheduleAttach(attempt + 1), 120);
+      }
+    };
+
+    scheduleAttach();
 
     return () => {
       cancelled = true;
+      window.clearTimeout(retryId);
       observer?.disconnect();
     };
-  }, [lot?.id, pageMetaLoading, detailLoading, visibleTabs, isMobileView, layout, tabsBarHeight]);
+  }, [lot?.id, pageMetaLoading, detailLoading, visibleTabIds, isMobileView, layout, tabsBarHeight]);
 
   useEffect(() => {
     setPhotoIndex(0);
@@ -2405,7 +2448,7 @@ function LotDetailPanel({
   const onbidUrl = onbidDetailUrl(lot, detail);
 
   return (
-    <article className={`lot-detail-panel lot-detail-panel--${layout}`}>
+    <article ref={panelRootRef} className={`lot-detail-panel lot-detail-panel--${layout}`}>
       {showResult && resultFields && (
         <section
           id="lot-detail-section-result"
