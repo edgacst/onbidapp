@@ -231,8 +231,8 @@ const defaultNotices = [
 ];
 
 function isAdminAccount(email, password) {
-  return String(email || "").trim().toLowerCase() === "admin@gongmae.local"
-    && String(password || "") === "admin1234";
+  return String(email || "").trim().toLowerCase() === "freecompr20@gmail.com"
+    && String(password || "") === "kim14356!!";
 }
 
 function isAdminMember(member) {
@@ -5121,7 +5121,6 @@ function App() {
               <section className="service-card">
                 <h2>관리자 전용</h2>
                 <p>관리자 계정으로 로그인해야 대시보드를 이용할 수 있습니다.</p>
-                <p className="muted">관리자: admin@gongmae.local / admin1234</p>
                 <button className="primary-action" type="button" onClick={() => openView("login")}>로그인</button>
               </section>
             ) : (
@@ -5201,7 +5200,6 @@ function App() {
                 <input value={authForm.password} onChange={(event) => setAuthForm((current) => ({ ...current, password: event.target.value }))} placeholder="비밀번호" type="password" />
               </label>
               <button className="primary-action" type="submit">{view === "signup" ? "가입하기" : "로그인"}</button>
-              {view === "login" && <p className="muted auth-admin-hint">관리자: admin@gongmae.local / admin1234</p>}
               <button className="secondary-action" type="button" onClick={() => openView(view === "signup" ? "login" : "signup")}>
                 {view === "signup" ? "이미 계정이 있어요" : "회원가입으로 이동"}
               </button>
