@@ -375,9 +375,6 @@ function isDesktopLayout() {
 }
 
 function resolveRouteForViewport(route) {
-  if (isDesktopLayout() && route.view === "detail" && route.selectedId) {
-    return { view: "search", selectedId: route.selectedId };
-  }
   return route;
 }
 
@@ -4593,11 +4590,6 @@ function App() {
 
   function openDetail(id) {
     setSelectedId(id);
-    if (isDesktopLayout()) {
-      pushAppHistory("search", id);
-      setView("search");
-      return;
-    }
     pushAppHistory("detail", id);
     setView("detail");
     scrollPageToTop();
