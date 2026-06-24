@@ -1418,21 +1418,19 @@ function extractOnbidHtmlPhotoCount(html) {
 
 async function probeOnbidImgGallery(atchFileLstNo, maxCount = PHOTO_PROBE_MAX) {
   if (!atchFileLstNo) return [];
-  const cacheKey = `img-gallery:${atchFileLstNo}:v1`;
+  const cacheKey = `img-gallery:${atchFileLstNo}:v2`;
   if (galleryPhotoCache.has(cacheKey)) return galleryPhotoCache.get(cacheKey);
 
-  const photos = [];
   const limit = Math.max(1, Math.min(maxCount, PHOTO_PROBE_MAX));
-  for (let atchSn = 1; atchSn <= limit; atchSn += 1) {
-    const url = buildOnbidImgDownloadUrl(atchFileLstNo, atchSn);
-    if (await probeOnbidPhotoUrl(url)) {
-      photos.push(url);
-      continue;
-    }
-    if (photos.length) break;
-  }
-
-  galleryPhotoCache.set(cacheKey, photos);
+  const checks = await Promise.all(
+    Array.from({ length: limit }, async (_, index) => {
+      const atchSn = index + 1;
+      const url = buildOnbidImgDownloadUrl(atchFileLstNo, atchSn);
+      return (await probeOnbidPhotoUrl(url)) ? url : null;
+    }),
+  );
+  const photos = checks.filter(Boolean);
+  if (photos.length) galleryPhotoCache.set(cacheKey, photos);
   return photos;
 }
 
@@ -1486,15 +1484,17 @@ function extractOnbidHtmlFileMeta(html) {
 async function fetchOnbidHtmlPhotoGallery(lot, detail = null, options = {}) {
   if (!lot?.id) return [];
   const mode = options.quick ? "quick" : "full";
-  const cacheKey = `html-photos:${mode}:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
+  const cacheKey = `html-photos:v2:${mode}:${lot.id}:${lot.conditionNo || ""}:${lot.pbctNo || ""}`;
   if (htmlPhotoCache.has(cacheKey)) return htmlPhotoCache.get(cacheKey);
+
+  const storePhotos = (photos) => {
+    if (photos.length) htmlPhotoCache.set(cacheKey, photos);
+    return photos;
+  };
 
   try {
     const html = await fetchOnbidDetailHtml(lot, detail);
-    if (!html || html.length < 1000) {
-      htmlPhotoCache.set(cacheKey, []);
-      return [];
-    }
+    if (!html || html.length < 1000) return [];
 
     const inlinePhotos = dedupePhotoUrls(extractOnbidHtmlPhotoUrls(html));
     const atchFileLstNo = extractOnbidHtmlAtchFileLstNo(html);
@@ -1509,30 +1509,21 @@ async function fetchOnbidHtmlPhotoGallery(lot, detail = null, options = {}) {
         photos = await probeOnbidImgGallery(atchFileLstNo, maxCount);
         if (!photos.length && inlinePhotos.length) photos = inlinePhotos;
       }
-      if (photos.length) {
-        htmlPhotoCache.set(cacheKey, photos);
-        return photos;
-      }
+      if (photos.length) return storePhotos(photos);
     }
 
     if (inlinePhotos.length) {
-      const photos = options.quick ? inlinePhotos.slice(0, 1) : inlinePhotos;
-      htmlPhotoCache.set(cacheKey, photos);
-      return photos;
+      return storePhotos(options.quick ? inlinePhotos.slice(0, 1) : inlinePhotos);
     }
 
     const meta = extractOnbidHtmlFileMeta(html);
-    if (!meta) {
-      htmlPhotoCache.set(cacheKey, []);
-      return [];
-    }
+    if (!meta) return [];
+
     const photos = options.quick
       ? buildQuickPhotosFromMeta(meta, extractPicCountFromHtml(html) || 3)
       : await probeGalleryFromFileMeta(meta);
-    htmlPhotoCache.set(cacheKey, photos);
-    return photos;
+    return photos.length ? storePhotos(photos) : [];
   } catch {
-    htmlPhotoCache.set(cacheKey, []);
     return [];
   }
 }
@@ -1699,11 +1690,11 @@ async function resolveLotPhotosForDisplay(lot, detail) {
 
   if (fromDetail.length > 1) return dedupePhotoUrls(fromDetail);
 
-  const fromHtml = await fetchOnbidHtmlPhotoGallery(
-    lot,
-    detail,
-    { quick: false },
-  );
+  if (!isResultLot(lot) && fromDetail.length === 1) {
+    return dedupePhotoUrls(fromDetail);
+  }
+
+  const fromHtml = await fetchOnbidHtmlPhotoGallery(lot, detail, { quick: false });
   if (fromHtml.length) return dedupePhotoUrls(fromHtml);
 
   if (thumbnail && !brokenThumb) return [thumbnail];
@@ -4111,44 +4102,48 @@ function App() {
   }, [selectedLot?.id, selectedLot?.conditionNo, selectedLot?.onbidNo, selectedLot?.pbctNo, selectedLot?.noticeNo, detail?.item, data.sample]);
 
   useEffect(() => {
-    if (!selected || data.sample) {
+    if (!selectedLot || data.sample) {
       setGalleryPhotos([]);
       setGalleryLoading(false);
       return undefined;
     }
 
     let cancelled = false;
-    let resolved = false;
-    const thumb = extractPhotoUrl(selected.thumbnail);
-    const brokenThumb = Boolean(thumb && isResultLot(selected) && /dnldFile\.do/.test(thumb));
-    if (thumb && !brokenThumb) setGalleryPhotos([thumb]);
-    setGalleryLoading(true);
+    const immediate = dedupePhotoUrls(resolveLotPhotos(selectedLot, detail));
+    const thumb = extractPhotoUrl(selectedLot.thumbnail);
+    const brokenThumb = Boolean(thumb && isResultLot(selectedLot) && /dnldFile\.do/.test(thumb));
+    const seedPhotos = immediate.length
+      ? immediate
+      : (thumb && !brokenThumb ? [thumb] : []);
 
-    const loadingGuard = window.setTimeout(() => {
-      if (!cancelled && !resolved) setGalleryLoading(false);
-    }, GALLERY_RESOLVE_TIMEOUT_MS);
+    if (seedPhotos.length) setGalleryPhotos(seedPhotos);
+    setGalleryLoading(!seedPhotos.length);
 
-    resolveLotPhotosForDisplay(selected, detail)
+    resolveLotPhotosForDisplay(selectedLot, detail)
       .then((photos) => {
         if (cancelled) return;
-        resolved = true;
-        const safeThumb = thumb && !brokenThumb ? thumb : "";
-        setGalleryPhotos(photos.length ? photos : (safeThumb ? [safeThumb] : []));
+        if (photos.length) {
+          setGalleryPhotos(photos);
+        } else if (!seedPhotos.length) {
+          setGalleryPhotos([]);
+        }
       })
       .finally(() => {
-        if (!cancelled) {
-          resolved = true;
-          window.clearTimeout(loadingGuard);
-          setGalleryLoading(false);
-        }
+        if (!cancelled) setGalleryLoading(false);
       });
 
     return () => {
       cancelled = true;
-      window.clearTimeout(loadingGuard);
-      setGalleryLoading(false);
     };
-  }, [selected?.id, selected?.thumbnail, selected?.conditionNo, detail, data.sample]);
+  }, [
+    selectedLot?.id,
+    selectedLot?.thumbnail,
+    selectedLot?.conditionNo,
+    selectedLot?.onbidNo,
+    selectedLot?.pbctNo,
+    detail?.item?.cltrMngNo,
+    data.sample,
+  ]);
 
   function submitSearch(event) {
     event.preventDefault();
