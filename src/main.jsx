@@ -48,14 +48,58 @@ const ONBID_MOVABLE_LIST_PATH = "/B010003/OnbidMvastListSrvc2/getMvastCltrList2"
 const ONBID_MOVABLE_DETAIL_PATH = "/B010003/OnbidMvastDtlSrvc2/getMvastDtlInf2";
 const ONBID_RESULT_LIST_PATH = "/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsltList2";
 const ONBID_RESULT_DETAIL_PATH = "/B010003/OnbidCltrBidRsltDtlSrvc2/getCltrBidRsltDtl2";
-const PAGE_SIZE = 50;
-const API_FETCH_TIMEOUT_MS = 25000;
+const PAGE_SIZE = 30;
+const API_FETCH_TIMEOUT_MS = 20000;
+const LIST_CACHE_TTL_MS = 90_000;
 const PHOTO_PROBE_TIMEOUT_MS = 3000;
 const PHOTO_PROBE_MAX = 10;
 const PAGE_META_TIMEOUT_MS = 20000;
 const GALLERY_RESOLVE_TIMEOUT_MS = 22000;
 const detailResponseCache = new Map();
 const htmlPhotoCache = new Map();
+const listResultCache = new Map();
+
+function listCacheKey(filters) {
+  return JSON.stringify({
+    keyword: filters.keyword || "",
+    propertyType: filters.propertyType || "",
+    bidType: filters.bidType || "",
+    privateContract: filters.privateContract || "",
+    region: filters.region || "",
+    pageNo: filters.pageNo || 1,
+    numOfRows: filters.numOfRows || PAGE_SIZE,
+    statusCode: filters.statusCode || "",
+    dspsMethod: filters.dspsMethod || "",
+    usageCategoryId: filters.usageCategoryId || "",
+    assetType: filters.assetType || "realty",
+  });
+}
+
+function readListCache(filters) {
+  const hit = listResultCache.get(listCacheKey(filters));
+  if (!hit || Date.now() - hit.at > LIST_CACHE_TTL_MS) return null;
+  return hit.data;
+}
+
+function writeListCache(filters, data) {
+  listResultCache.set(listCacheKey(filters), { at: Date.now(), data });
+}
+
+const statusTotalsCache = new Map();
+const STATUS_TOTALS_TTL_MS = 120_000;
+
+function statusTotalsKey(filters) {
+  return JSON.stringify({
+    keyword: filters.keyword || "",
+    propertyType: filters.propertyType || "",
+    bidType: filters.bidType || "",
+    privateContract: filters.privateContract || "",
+    region: filters.region || "",
+    dspsMethod: filters.dspsMethod || "",
+    usageCategoryId: filters.usageCategoryId || "",
+    assetType: filters.assetType || "realty",
+  });
+}
 
 function readApiHeader(payload) {
   return payload?.response?.header ?? payload?.header ?? payload?.result ?? null;
@@ -3494,28 +3538,33 @@ async function fetchLotFromListByManagementNo(lotId, assetType) {
     usageCategoryId: "",
   };
 
-  try {
-    const result = await fetchOnbidLots(baseFilters);
-    const direct = result.lots.find((lot) => lot.id === lotId);
-    if (direct) return direct;
-  } catch {
-    // 물건관리번호 단건 조회 실패 시 아래 조합 검색으로 폴백
-  }
+  const tryFilters = async (overrides = {}) => {
+    try {
+      const result = await fetchOnbidLots({ ...baseFilters, ...overrides });
+      return result.lots.find((lot) => lot.id === lotId) || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const quick = await tryFilters({ propertyType: "0007", privateContract: "N" });
+  if (quick) return quick;
 
   const propertyTypes = assetType === "movable"
-    ? ["0007", "0010", "0005", "0004", "0002"]
-    : ["0007", "0010", "0005", "0002", "0008"];
+    ? ["0010", "0005", "0004", "0002"]
+    : assetType === "car"
+      ? ["0010", "0005"]
+      : ["0010", "0005", "0002", "0008"];
 
-  for (const propertyType of propertyTypes) {
-    for (const privateContract of ["N", "Y"]) {
-      try {
-        const result = await fetchOnbidLots({ ...baseFilters, propertyType, privateContract });
-        const found = result.lots.find((lot) => lot.id === lotId);
-        if (found) return found;
-      } catch {
-        // 다음 조합 시도
-      }
-    }
+  const combinations = propertyTypes.flatMap((propertyType) => (
+    ["N", "Y"].map((privateContract) => ({ propertyType, privateContract }))
+  ));
+
+  for (let index = 0; index < combinations.length; index += 4) {
+    const batch = combinations.slice(index, index + 4);
+    const results = await Promise.all(batch.map((combo) => tryFilters(combo)));
+    const found = results.find(Boolean);
+    if (found) return found;
   }
   return null;
 }
@@ -3525,7 +3574,7 @@ async function fetchLotFromResultListByManagementNo(lotId, assetType) {
   const baseFilters = {
     assetType,
     managementNo: lotId,
-    propertyType: "",
+    propertyType: "0007",
     pageNo: 1,
     numOfRows: 10,
     keyword: "",
@@ -3546,22 +3595,28 @@ async function fetchLotFromResultListByManagementNo(lotId, assetType) {
     }
   };
 
-  for (const statusCode of ["", "0010", "0011"]) {
-    const found = await tryLookup({ statusCode });
-    if (found) return found;
-  }
+  const quickHits = await Promise.all([
+    tryLookup({}),
+    tryLookup({ statusCode: "0010" }),
+    tryLookup({ statusCode: "0011" }),
+  ]);
+  const quick = quickHits.find(Boolean);
+  if (quick) return quick;
 
   const propertyTypes = assetType === "movable"
-    ? ["0007", "0010", "0005", "0004", "0002"]
+    ? ["0010", "0005", "0004", "0002"]
     : assetType === "car"
-      ? ["0007", "0010", "0005"]
-      : ["0007", "0010", "0005", "0002", "0008"];
+      ? ["0010", "0005"]
+      : ["0010", "0005", "0002", "0008"];
 
   for (const propertyType of propertyTypes) {
-    for (const statusCode of ["0010", "0011", ""]) {
-      const found = await tryLookup({ propertyType, statusCode });
-      if (found) return found;
-    }
+    const hits = await Promise.all([
+      tryLookup({ propertyType }),
+      tryLookup({ propertyType, statusCode: "0010" }),
+      tryLookup({ propertyType, statusCode: "0011" }),
+    ]);
+    const found = hits.find(Boolean);
+    if (found) return found;
   }
   return null;
 }
@@ -3582,11 +3637,13 @@ async function fetchLotByManagementNo(lotId, preferredAssetType = "realty") {
   if (!lotId) return null;
 
   const lookupAssetType = async (assetType) => {
-    const fromDetail = await fetchLotFromDetail(lotId, assetType);
-    if (fromDetail) return fromDetail;
-    const fromList = await fetchLotFromListByManagementNo(lotId, assetType);
+    const [fromList, fromResult] = await Promise.all([
+      fetchLotFromListByManagementNo(lotId, assetType),
+      fetchLotFromResultListByManagementNo(lotId, assetType),
+    ]);
     if (fromList) return fromList;
-    return fetchLotFromResultListByManagementNo(lotId, assetType);
+    if (fromResult) return fromResult;
+    return fetchLotFromDetail(lotId, assetType);
   };
 
   const preferred = await lookupAssetType(preferredAssetType);
@@ -3903,6 +3960,7 @@ function App() {
     }
   });
   const [loading, setLoading] = useState(false);
+  const loadLotsRequestRef = useRef(0);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
@@ -4121,51 +4179,59 @@ function App() {
   );
 
   async function loadLots(filters = activeFilters) {
-    setLoading(true);
+    const requestId = ++loadLotsRequestRef.current;
+    const isStale = () => requestId !== loadLotsRequestRef.current;
+
+    const cachedList = readListCache(filters);
+    if (cachedList) {
+      setData({ ...cachedList, sample: false });
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError("");
+
     let loadingGuard = null;
     try {
       loadingGuard = window.setTimeout(() => {
-        setLoading(false);
+        if (!isStale()) setLoading(false);
       }, API_FETCH_TIMEOUT_MS + 5000);
 
       const preserveId = filters.preserveSelectedId
         ? normalizeLotId(filters.preserveSelectedId)
         : (view === "detail" && selectedId ? normalizeLotId(selectedId) : "");
-      if (preserveId && !filters.keyword?.trim() && !filters.statusCode) {
-        const assetType = filters.assetType || assetTypeFromLotId(preserveId);
-        const foundLot = await fetchLotByManagementNo(preserveId, assetType);
-        if (foundLot) {
-          setHomeAssetType(foundLot.assetType || assetType);
-          if ((foundLot.assetType || assetType) !== "realty") {
-            setHomeUsage("");
-            setUsageCategoryId("");
-          }
-          setData({ lots: [foundLot], pageNo: 1, numOfRows: PAGE_SIZE, totalCount: 1, sample: false });
-          setSelectedId(preserveId);
-          setStatusTotals({
-            available: matchesStatusFocus(foundLot, "available") ? 1 : 0,
-            ready: matchesStatusFocus(foundLot, "ready") ? 1 : 0,
-            sold: matchesStatusFocus(foundLot, "sold") ? 1 : 0,
-            failed: matchesStatusFocus(foundLot, "failed") ? 1 : 0,
-          });
-          return;
-        }
-      }
 
       const keywordLotId = isOnbidLotId(filters.keyword) ? normalizeLotId(filters.keyword.trim()) : "";
       if (keywordLotId && !filters.statusCode) {
         const assetType = assetTypeFromLotId(keywordLotId);
-        const foundLot = await fetchLotByManagementNo(keywordLotId, assetType);
-        if (foundLot) {
+        const mgmtFilters = {
+          ...filters,
+          managementNo: keywordLotId,
+          keyword: "",
+          pageNo: 1,
+          numOfRows: 10,
+        };
+        const [foundLot, listHit] = await Promise.all([
+          fetchLotByManagementNo(keywordLotId, assetType),
+          fetchOnbidLots(mgmtFilters).catch(() => ({ lots: [], totalCount: 0 })),
+        ]);
+        if (isStale()) return;
+
+        const lot = foundLot || listHit.lots.find((item) => item.id === keywordLotId) || null;
+        if (lot) {
           setHomeAssetType(assetType);
           if (assetType !== "realty") {
             setHomeUsage("");
             setUsageCategoryId("");
           }
-          setData({ lots: [foundLot], pageNo: 1, numOfRows: PAGE_SIZE, totalCount: 1, sample: false });
+          setData({ lots: [lot], pageNo: 1, numOfRows: PAGE_SIZE, totalCount: 1, sample: false });
           setSelectedId(keywordLotId);
-          setStatusTotals({ available: 1, ready: matchesStatusFocus(foundLot, "ready") ? 1 : 0, sold: 0, failed: 0 });
+          setStatusTotals({
+            available: 1,
+            ready: matchesStatusFocus(lot, "ready") ? 1 : 0,
+            sold: 0,
+            failed: 0,
+          });
           return;
         }
 
@@ -4178,20 +4244,33 @@ function App() {
         setError("해당 물건관리번호를 찾지 못했습니다. 번호를 확인하거나 온비드에서 직접 조회해보세요.");
         return;
       }
-      const result = filters.statusCode === "0010" || filters.statusCode === "0011"
-        ? await fetchOnbidResultLots(filters)
-        : await fetchOnbidLots(filters);
-      if (filters.preserveSelectedId && !result.lots.some((lot) => lot.id === filters.preserveSelectedId)) {
-        const normalizedId = normalizeLotId(filters.preserveSelectedId);
-        const foundLot = await fetchLotByManagementNo(normalizedId, assetTypeFromLotId(normalizedId)).catch(() => null);
-        if (foundLot) {
-          result.lots = [foundLot, ...result.lots.filter((lot) => lot.id !== foundLot.id)];
-          result.totalCount = Math.max(result.totalCount || 0, result.lots.length);
-        }
+
+      const isResultList = filters.statusCode === "0010" || filters.statusCode === "0011";
+      const listPromise = isResultList
+        ? fetchOnbidResultLots(filters)
+        : fetchOnbidLots(filters);
+      const needsPreserveLookup = Boolean(preserveId && !filters.keyword?.trim() && !filters.statusCode);
+      const preservePromise = needsPreserveLookup
+        ? fetchLotByManagementNo(
+          preserveId,
+          filters.assetType || assetTypeFromLotId(preserveId),
+        ).catch(() => null)
+        : Promise.resolve(null);
+
+      const [result, preserveLot] = await Promise.all([listPromise, preservePromise]);
+      if (isStale()) return;
+
+      if (preserveId && preserveLot && !result.lots.some((lot) => lot.id === preserveLot.id)) {
+        result.lots = [preserveLot, ...result.lots.filter((lot) => lot.id !== preserveLot.id)];
+        result.totalCount = Math.max(result.totalCount || 0, result.lots.length);
       }
+
+      writeListCache(filters, result);
       setData({ ...result, sample: false });
-      if (filters.statusCode === "0010" || filters.statusCode === "0011") {
+
+      if (isResultList) {
         const mergeThumbnails = (updates) => {
+          if (isStale()) return;
           setData((prev) => {
             if (prev.sample) return prev;
             return {
@@ -4208,27 +4287,41 @@ function App() {
           priorityId: preserveId || selectedId,
           onProgress: mergeThumbnails,
         }).then((enriched) => {
+          if (isStale()) return;
           setData((prev) => (prev.sample ? prev : { ...prev, lots: enriched }));
         }).catch(() => {});
       }
+
       const nextSelectedId = preserveId
         || (result.lots.some((lot) => lot.id === selectedId) ? selectedId : "")
         || result.lots[0]?.id
         || "";
       setSelectedId(nextSelectedId);
+
       if (!filters.statusCode) {
         const availableCount = result.totalCount || result.lots.length;
-        window.setTimeout(() => {
-          Promise.all([
-            fetchOnbidCount(filters, "0001").catch(() => 0),
-            fetchOnbidCount(filters, "0010").catch(() => 0),
-            fetchOnbidCount(filters, "0011").catch(() => 0),
-          ]).then(([ready, sold, failed]) => {
-            setStatusTotals({ ready, sold, failed, available: availableCount });
-          });
-        }, 0);
+        const totalsKey = statusTotalsKey(filters);
+        const cachedTotals = statusTotalsCache.get(totalsKey);
+        if (cachedTotals && Date.now() - cachedTotals.at < STATUS_TOTALS_TTL_MS) {
+          setStatusTotals({ ...cachedTotals.data, available: availableCount });
+        } else {
+          window.setTimeout(() => {
+            if (isStale()) return;
+            Promise.all([
+              fetchOnbidCount(filters, "0001").catch(() => 0),
+              fetchOnbidCount(filters, "0010").catch(() => 0),
+              fetchOnbidCount(filters, "0011").catch(() => 0),
+            ]).then(([ready, sold, failed]) => {
+              if (isStale()) return;
+              const totals = { ready, sold, failed, available: availableCount };
+              statusTotalsCache.set(totalsKey, { at: Date.now(), data: totals });
+              setStatusTotals(totals);
+            });
+          }, 400);
+        }
       }
     } catch (err) {
+      if (isStale()) return;
       if (filters.statusCode === "0010" || filters.statusCode === "0011") {
         setData({ lots: [], totalCount: 0, sample: false });
         setSelectedId("");
@@ -4244,7 +4337,7 @@ function App() {
       setError(err instanceof Error ? err.message : "온비드 API 호출에 실패했습니다.");
     } finally {
       if (loadingGuard) window.clearTimeout(loadingGuard);
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }
 

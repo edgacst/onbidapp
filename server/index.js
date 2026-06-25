@@ -24,6 +24,24 @@ function rewriteOnbidApiPath(pathname) {
   return `${nextPath}${separator}serviceKey=${onbidServiceKey}`;
 }
 
+const apiResponseCache = new Map();
+const API_CACHE_TTL_MS = 90_000;
+const API_CACHE_MAX_ENTRIES = 400;
+
+function apiCacheKey(url) {
+  return String(url || "")
+    .replace(/([?&])serviceKey=[^&]*(&?)/g, "$1")
+    .replace(/[?&]$/, "");
+}
+
+function pruneApiCache() {
+  if (apiResponseCache.size <= API_CACHE_MAX_ENTRIES) return;
+  const entries = [...apiResponseCache.entries()].sort((a, b) => a[1].at - b[1].at);
+  for (let index = 0; index < entries.length - API_CACHE_MAX_ENTRIES; index += 1) {
+    apiResponseCache.delete(entries[index][0]);
+  }
+}
+
 const app = express();
 app.use(express.json({ limit: "32kb" }));
 
@@ -64,12 +82,51 @@ function createSafeProxy(label, options) {
   });
 }
 
+app.use("/onbid-api", (req, res, next) => {
+  if (req.method !== "GET") return next();
+  const key = apiCacheKey(req.originalUrl);
+  const hit = apiResponseCache.get(key);
+  if (hit && Date.now() - hit.at < API_CACHE_TTL_MS) {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("X-Onbid-Cache", "HIT");
+    res.send(hit.body);
+    return;
+  }
+  req.onbidCacheKey = key;
+  next();
+});
+
 app.use(
   "/onbid-api",
   createSafeProxy("onbid-api", {
     target: "https://apis.data.go.kr",
     changeOrigin: true,
     pathRewrite: rewriteOnbidApiPath,
+    selfHandleResponse: true,
+    on: {
+      proxyRes(proxyRes, req, res) {
+        const chunks = [];
+        proxyRes.on("data", (chunk) => chunks.push(chunk));
+        proxyRes.on("end", () => {
+          const body = Buffer.concat(chunks);
+          if (req.onbidCacheKey && proxyRes.statusCode === 200) {
+            apiResponseCache.set(req.onbidCacheKey, {
+              body: body.toString("utf8"),
+              at: Date.now(),
+            });
+            pruneApiCache();
+          }
+          if (!res.headersSent) {
+            res.status(proxyRes.statusCode || 502);
+            Object.entries(proxyRes.headers || {}).forEach(([name, value]) => {
+              if (value !== undefined) res.setHeader(name, value);
+            });
+            res.setHeader("X-Onbid-Cache", req.onbidCacheKey ? "MISS" : "SKIP");
+            res.end(body);
+          }
+        });
+      },
+    },
   }),
 );
 
