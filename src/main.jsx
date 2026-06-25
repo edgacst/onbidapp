@@ -4174,6 +4174,19 @@ function App() {
     return next;
   }, [data.lots, sortBy, statusFocus, view, saved, checkMode]);
 
+  const mySavedLots = useMemo(() => {
+    const base = data.sample ? sampleLots : data.lots;
+    return saved
+      .map((id) => base.find((lot) => lot.id === id))
+      .filter(Boolean);
+  }, [saved, data.lots, data.sample]);
+
+  const myActivityQuestions = useMemo(() => (
+    questions
+      .filter((question) => !member || question.author === member.name || question.author === "비회원")
+      .sort((a, b) => Number(b.number || 0) - Number(a.number || 0))
+  ), [questions, member]);
+
   const statusCounts = useMemo(() => {
     const base = data.sample ? sampleLots : data.lots;
     const counts = Object.fromEntries(
@@ -5780,37 +5793,79 @@ function App() {
             </form>
           </section>
         ) : view === "mypage" ? (
-          <section className="service-page">
+          <section className="service-page mypage-page">
             {serviceNotice && (
               <p className="service-notice" role="status">{serviceNotice}</p>
             )}
-            <section className="service-card profile-card">
-              <h2>{member ? `${member.name}님` : "비회원"}</h2>
-              <p>{member ? member.email : "로그인하면 관심 물건과 질문 이력을 저장할 수 있습니다."}</p>
-              <div className="profile-stats">
-                <div><span>관심 물건</span><strong>{saved.length}건</strong></div>
-                <div><span>질문</span><strong>{questions.length}건</strong></div>
+
+            <section className="service-card mypage-row mypage-profile">
+              <h2>내정보</h2>
+              <div className="mypage-profile-body">
+                <div className="mypage-profile-main">
+                  <div className="mypage-profile-avatar" aria-hidden="true">
+                    <User size={24} />
+                  </div>
+                  <div className="mypage-profile-text">
+                    <strong>{member ? `${member.name}님` : "비회원"}</strong>
+                    <p>{member ? member.email : "로그인하면 관심 물건과 질문 이력을 저장할 수 있습니다."}</p>
+                  </div>
+                </div>
+                <div className="profile-stats mypage-profile-stats">
+                  <div><span>찜한 물건</span><strong>{saved.length}건</strong></div>
+                  <div><span>질문</span><strong>{myActivityQuestions.length}건</strong></div>
+                </div>
+                <div className="mypage-profile-actions">
+                  {member ? (
+                    <button className="secondary-action" type="button" onClick={() => setMember(null)}>로그아웃</button>
+                  ) : (
+                    <button className="primary-action" type="button" onClick={() => openView("login")}>로그인하기</button>
+                  )}
+                  {isAdminMember(member) && (
+                    <button className="primary-action" type="button" onClick={openAdminDashboard}>관리자 대시보드</button>
+                  )}
+                </div>
               </div>
-              {member ? (
-                <button className="secondary-action" onClick={() => setMember(null)}>로그아웃</button>
-              ) : (
-                <button className="primary-action" onClick={() => openView("login")}>로그인하기</button>
-              )}
-              {isAdminMember(member) && (
-                <button className="primary-action" type="button" onClick={openAdminDashboard}>관리자 대시보드</button>
-              )}
             </section>
-            <section className="service-card">
-              <h2>내 활동</h2>
-              <div className="question-list">
-                {questions.filter((question) => !member || question.author === member.name || question.author === "비회원").slice(0, 5).map((question) => (
-                  <article key={question.id}>
+
+            <section className="service-card mypage-row mypage-activity">
+              <div className="mypage-row-head">
+                <h2>내 활동내역</h2>
+                <button type="button" className="plain-action" onClick={() => openView("board")}>전체 보기</button>
+              </div>
+              <div className="mypage-hscroll mypage-activity-list">
+                {myActivityQuestions.length > 0 ? myActivityQuestions.map((question) => (
+                  <article key={question.id} className="mypage-activity-card">
                     <span>{question.status}</span>
                     <strong>{question.title || question.body}</strong>
                     <small>{question.category || "일반"} · {question.createdAt}</small>
                   </article>
-                ))}
-                {questions.length === 0 && <p className="muted">아직 활동 내역이 없습니다.</p>}
+                )) : (
+                  <p className="muted mypage-empty-inline">아직 활동 내역이 없습니다.</p>
+                )}
+              </div>
+            </section>
+
+            <section className="service-card mypage-row mypage-saved">
+              <div className="mypage-row-head">
+                <h2>찜한 물건</h2>
+                <button type="button" className="plain-action" onClick={() => openView("watch")}>전체 보기</button>
+              </div>
+              <div className="mypage-hscroll mypage-saved-list">
+                {mySavedLots.length > 0 ? mySavedLots.map((lot) => (
+                  <article key={lot.id} className="mypage-saved-card" onClick={() => openDetail(lot.id)}>
+                    {lot.thumbnail
+                      ? <AuctionImage src={lot.thumbnail} alt={lot.title} />
+                      : <div className="mypage-saved-empty">사진 없음</div>}
+                    <div className="mypage-saved-body">
+                      <span className={`status ${statusClass(lot.status)}`}>{lot.status}</span>
+                      <strong>{lot.title}</strong>
+                      <p><MapPin size={13} /> {lot.address || lot.region || "-"}</p>
+                      <em>{compactMoney(lot.minimum)}</em>
+                    </div>
+                  </article>
+                )) : (
+                  <p className="muted mypage-empty-inline">찜한 물건이 없습니다. 탐색에서 하트를 눌러 저장하세요.</p>
+                )}
               </div>
             </section>
           </section>
