@@ -86,7 +86,11 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y git curl
 
-if ! command -v node >/dev/null 2>&1 || [[ "$(node -p process.versions.node.split('.')[0])" -lt 20 ]]; then
+if ! command -v node >/dev/null 2>&1; then
+  echo "==> Node.js 20 설치"
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt-get install -y nodejs
+elif [[ "$(node -p 'process.versions.node.split(".")[0]')" -lt 20 ]]; then
   echo "==> Node.js 20 설치"
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
