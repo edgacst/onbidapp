@@ -60,7 +60,8 @@ async function main() {
   setupChromeDevtoolsForward(deviceId);
 
   const activePort = await pickActivePort(ports);
-  const deviceUrl = `http://127.0.0.1:${activePort}/`;
+  const cacheBust = Date.now();
+  const deviceUrl = `http://127.0.0.1:${activePort}/?_=${cacheBust}#mypage`;
   const serverRunning = await isPortOpen(activePort);
 
   console.log("\n=== 폰 USB 연결 (유선) ===");

@@ -49,6 +49,8 @@ const ONBID_MOVABLE_DETAIL_PATH = "/B010003/OnbidMvastDtlSrvc2/getMvastDtlInf2";
 const ONBID_RESULT_LIST_PATH = "/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsltList2";
 const ONBID_RESULT_DETAIL_PATH = "/B010003/OnbidCltrBidRsltDtlSrvc2/getCltrBidRsltDtl2";
 const PAGE_SIZE = 30;
+const APP_BUILD = typeof __APP_BUILD__ !== "undefined" ? __APP_BUILD__ : "dev";
+const APP_BUILD_STORAGE_KEY = "auctionAppBuild";
 const API_FETCH_TIMEOUT_MS = 20000;
 const LIST_CACHE_TTL_MS = 90_000;
 const PHOTO_PROBE_TIMEOUT_MS = 3000;
@@ -4011,6 +4013,7 @@ function App() {
   });
   const [loading, setLoading] = useState(false);
   const loadLotsRequestRef = useRef(0);
+  const pendingBoardQuestionRef = useRef("");
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
@@ -4151,12 +4154,38 @@ function App() {
   }, [notices]);
 
   useEffect(() => {
+    if (!APP_BUILD || APP_BUILD === "dev") return;
+    const prev = localStorage.getItem(APP_BUILD_STORAGE_KEY);
+    if (prev && prev !== APP_BUILD) {
+      localStorage.setItem(APP_BUILD_STORAGE_KEY, APP_BUILD);
+      window.location.reload();
+      return;
+    }
+    localStorage.setItem(APP_BUILD_STORAGE_KEY, APP_BUILD);
+  }, []);
+
+  useEffect(() => {
+    if (pendingBoardQuestionRef.current) return;
     setOpenQuestionId("");
     setReplyingTo({ questionId: "", parentId: "" });
     setCommentDraft("");
     setEditingComment({ questionId: "", commentId: "" });
     setEditCommentDraft("");
   }, [boardSearch, boardStatus]);
+
+  useEffect(() => {
+    if (view !== "board" || !pendingBoardQuestionRef.current) return undefined;
+    const questionId = pendingBoardQuestionRef.current;
+    pendingBoardQuestionRef.current = "";
+    setOpenQuestionId(questionId);
+    const timer = window.setTimeout(() => {
+      document.querySelector(`[data-question-id="${questionId}"]`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [view, boardSearch, boardStatus]);
 
   useEffect(() => {
     if (view !== "board" || !openQuestionId) return undefined;
@@ -5041,13 +5070,13 @@ function App() {
   }
 
   function openBoardQuestion(questionId) {
+    pendingBoardQuestionRef.current = questionId;
     setBoardWriteOpen(false);
     setBoardSearch("");
     setBoardStatus("all");
     pushAppHistory("board");
     setView("board");
     scrollPageToTop();
-    window.setTimeout(() => setOpenQuestionId(questionId), 0);
   }
 
   function scrollMypageSection(sectionId) {
@@ -5913,6 +5942,7 @@ function App() {
                 )}
               </div>
             </section>
+            <p className="app-build-stamp" aria-hidden="true">v{APP_BUILD.replace("T", " ").slice(0, 19)}</p>
           </section>
         ) : view === "detail" && selected ? (
           <section className="detail-page">

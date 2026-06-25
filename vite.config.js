@@ -9,6 +9,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    define: {
+      __APP_BUILD__: JSON.stringify(process.env.VITE_APP_BUILD || env.VITE_APP_BUILD || "dev"),
+    },
     build: {
       minify: false,
     },

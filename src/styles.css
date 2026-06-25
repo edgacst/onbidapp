@@ -1736,6 +1736,13 @@ a {
   font-size: 14px;
 }
 
+.app-build-stamp {
+  margin: 0;
+  text-align: center;
+  color: #9aa8b3;
+  font-size: 11px;
+}
+
 .home-page {
   max-width: 1440px;
   margin: 20px auto 0;

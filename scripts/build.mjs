@@ -41,7 +41,12 @@ try {
   console.log("Installing build dependencies...");
   execFileSync("cmd.exe", ["/c", "npm", "install", "--silent"], { cwd: buildRoot, stdio: "inherit" });
   console.log("Running Vite build...");
-  execFileSync("cmd.exe", ["/c", "npm", "run", "build:inner"], { cwd: buildRoot, stdio: "inherit" });
+  const buildId = new Date().toISOString();
+  execFileSync("cmd.exe", ["/c", "npm", "run", "build:inner"], {
+    cwd: buildRoot,
+    stdio: "inherit",
+    env: { ...process.env, VITE_APP_BUILD: buildId },
+  });
 
   console.log("Copying dist back to project...");
   execFileSync("cmd.exe", ["/c", "if", "exist", "dist", "rmdir", "/s", "/q", "dist"], { cwd: root, stdio: "inherit" });
