@@ -5163,9 +5163,6 @@ function App() {
               <button onClick={openBidCheck}><ShieldAlert size={22} /><strong>입찰 체크 목록</strong><span>검토 필요 물건 모아보기</span></button>
               <button onClick={() => openStatus("sold")}><Star size={22} /><strong>낙찰결과</strong><span>최근 개찰 결과 확인</span></button>
               <button onClick={openNoticeBoard}><Bell size={22} /><strong>공지사항</strong><span>서비스 안내와 변경사항</span></button>
-              {isAdminMember(member) && (
-                <button onClick={openAdminDashboard}><LayoutDashboard size={22} /><strong>관리자 대시보드</strong><span>공지·질문 운영 관리</span></button>
-              )}
             </section>
 
             <div className="status-grid">
