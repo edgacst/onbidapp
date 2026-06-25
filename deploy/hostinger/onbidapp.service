@@ -1,0 +1,19 @@
+[Unit]
+Description=에드가공매 Express server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/onbidapp
+Environment=NODE_ENV=production
+EnvironmentFile=-/opt/onbidapp/.env
+ExecStart=/usr/bin/node server/index.js
+Restart=on-fail
+RestartSec=5
+StandardOutput=append:/opt/onbidapp/logs/server.log
+StandardError=append:/opt/onbidapp/logs/server.log
+
+[Install]
+WantedBy=multi-user.target
