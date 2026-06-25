@@ -2226,30 +2226,20 @@ function LotDetailPanel({
     typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches
   ));
 
-  const visibleTabs = useMemo(() => {
-    const detailTabs = [
-      ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
-      { id: "spec", label: "세부정보" },
-      { id: "seized", label: "압류재산정보" },
-      { id: "bid-info", label: "입찰정보" },
-      { id: "bid-method", label: "입찰방법" },
-      { id: "bid-limit", label: "입찰제한정보" },
-      { id: "documents", label: "제출서류" },
-      { id: "bid-schedule", label: "입찰일정및장소" },
-      { id: "payment", label: "납부기한안내" },
-      { id: "prev-bids", label: "이전입찰내역" },
-      { id: "market", label: "인근시세및낙찰사례" },
-      { id: "market-stats", label: "인근낙찰통계" },
-    ];
-    const mobileTabs = [
-      ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
-      { id: "spec", label: "세부정보" },
-      { id: "seized", label: "압류재산" },
-      { id: "bid-info", label: "입찰정보" },
-      { id: "market", label: "인근시세" },
-    ];
-    return isMobileView ? mobileTabs : detailTabs;
-  }, [isMobileView, showResult]);
+  const visibleTabs = useMemo(() => [
+    ...(showResult ? [{ id: "result", label: "낙찰결과" }] : []),
+    { id: "spec", label: "세부정보" },
+    { id: "seized", label: "압류재산정보" },
+    { id: "bid-info", label: "입찰정보" },
+    { id: "bid-method", label: "입찰방법" },
+    { id: "bid-limit", label: "입찰제한정보" },
+    { id: "documents", label: "제출서류" },
+    { id: "bid-schedule", label: "입찰일정및장소" },
+    { id: "payment", label: "납부기한안내" },
+    { id: "prev-bids", label: "이전입찰내역" },
+    { id: "market", label: "인근시세및낙찰사례" },
+    { id: "market-stats", label: "인근낙찰통계" },
+  ], [showResult]);
 
   const visibleTabIds = useMemo(
     () => visibleTabs.map((tab) => tab.id).join("|"),
@@ -3078,101 +3068,8 @@ function LotDetailPanel({
                 <span>{lot.failedCount ?? 0}회</span>
               </div>
             </div>
-            {isMobileView && (
-              <div className="lot-detail-nested-tabs">
-                <DetailSubsection title="입찰방법">
-                  <div className="lot-detail-chip-row">
-                    {capabilityTags.length > 0 ? capabilityTags.map((tag) => (
-                      <span key={tag} className="lot-detail-chip blue">{tag}</span>
-                    )) : <span className="muted">{pageMetaLoading ? "불러오는 중" : "-"}</span>}
-                  </div>
-                </DetailSubsection>
-                <DetailSubsection title="입찰제한정보">
-                  <div className="lot-detail-chip-row">
-                    {restrictionTags.length > 0 ? restrictionTags.map((tag) => (
-                      <span key={tag} className="lot-detail-chip gray">{tag}</span>
-                    )) : <span className="muted">-</span>}
-                  </div>
-                </DetailSubsection>
-                <DetailSubsection title="제출서류">
-                  <table className="lot-detail-table lot-detail-mobile-table">
-                    <thead>
-                      <tr>
-                        <th>구분</th>
-                        <th>서류명</th>
-                        <th>제출기한</th>
-                        <th>제출방법</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td colSpan={4}>조회된 결과가 없습니다.</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  {appraisalUrl && (
-                    <div className="lot-detail-meta-footer">
-                      <a className="lot-detail-doc-link" href={appraisalUrl} target="_blank" rel="noreferrer">
-                        <FileText size={16} /> 감정평가서
-                      </a>
-                    </div>
-                  )}
-                </DetailSubsection>
-                <DetailSubsection title="입찰일정및장소">
-                  <div className="lot-detail-field-grid">
-                    <div className="lot-detail-field">
-                      <strong>입찰기간</strong>
-                      <span>{lot.starts || "-"} ~ {lot.ends || "-"}</span>
-                    </div>
-                    <div className="lot-detail-field">
-                      <strong>개찰일시</strong>
-                      <span>{lot.ends || "-"}</span>
-                    </div>
-                    <div className="lot-detail-field">
-                      <strong>개찰장소</strong>
-                      <span>온비드 전자입찰</span>
-                    </div>
-                    <div className="lot-detail-field">
-                      <strong>입찰상태</strong>
-                      <span>{statusLabel}</span>
-                    </div>
-                  </div>
-                </DetailSubsection>
-                <DetailSubsection title="납부기한안내">
-                  <div className="lot-detail-field-grid">
-                    <div className="lot-detail-field">
-                      <strong>배분요구종기</strong>
-                      <span>{lot.distributionDue || detailItem.dtbtRqrEdtmCont || "-"}</span>
-                    </div>
-                    <div className="lot-detail-field lot-detail-field-span">
-                      <strong>안내</strong>
-                      <span>낙찰 후 대금 납부 기한·계좌는 온비드 입찰결과 및 공고문에서 최종 확인하세요.</span>
-                    </div>
-                  </div>
-                </DetailSubsection>
-                <DetailSubsection title="이전입찰내역">
-                  <p className="muted">유찰 {lot.failedCount ?? 0}회</p>
-                  <table className="lot-detail-table lot-detail-mobile-table">
-                    <thead>
-                      <tr>
-                        <th>회차</th>
-                        <th>최저입찰가</th>
-                        <th>결과</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td colSpan={3}>조회된 결과가 없습니다.</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </DetailSubsection>
-              </div>
-            )}
           </DetailTabSection>
 
-          {!isMobileView && (
-            <>
           <DetailTabSection id="bid-method" title="입찰방법" sectionRefs={sectionRefs}>
             <div className="lot-detail-chip-row">
               {capabilityTags.length > 0 ? capabilityTags.map((tag) => (
@@ -3265,26 +3162,17 @@ function LotDetailPanel({
               </tbody>
             </table>
           </DetailTabSection>
-            </>
-          )}
 
-          <DetailTabSection id="market" title={isMobileView ? "인근시세" : "인근시세및낙찰사례"} sectionRefs={sectionRefs}>
+          <DetailTabSection id="market" title="인근시세및낙찰사례" sectionRefs={sectionRefs}>
             <div className="lot-detail-section">
               <h4>인근 낙찰 물건</h4>
               <p className="muted">{pageMetaLoading ? "불러오는 중" : "최근 6개월 간 동일 지역·용도 기준 낙찰 물건이 없습니다."}</p>
             </div>
-            {isMobileView && (
-              <DetailSubsection title="인근낙찰통계">
-                <p className="muted">{pageMetaLoading ? "불러오는 중" : "최근 6개월 간 동일 지역·용도 기준 낙찰 통계가 없습니다."}</p>
-              </DetailSubsection>
-            )}
           </DetailTabSection>
 
-          {!isMobileView && (
           <DetailTabSection id="market-stats" title="인근낙찰통계" sectionRefs={sectionRefs}>
             <p className="muted">최근 6개월 간 동일 지역·용도 기준 낙찰 통계가 없습니다.</p>
           </DetailTabSection>
-          )}
         </div>
       </section>
 
