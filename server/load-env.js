@@ -1,6 +1,23 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+function parseEnvValue(raw) {
+  let value = String(raw || "").trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"'))
+    || (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1);
+  }
+  const commentIndex = value.indexOf(" #");
+  if (commentIndex !== -1) value = value.slice(0, commentIndex).trim();
+  return value;
+}
+
+function shouldApplyEnvValue(currentValue) {
+  return currentValue == null || String(currentValue).trim() === "";
+}
+
 function applyEnvFile(filePath) {
   if (!existsSync(filePath)) return;
   const content = readFileSync(filePath, "utf8");
@@ -10,8 +27,8 @@ function applyEnvFile(filePath) {
     const separator = trimmed.indexOf("=");
     if (separator === -1) continue;
     const key = trimmed.slice(0, separator).trim();
-    const value = trimmed.slice(separator + 1).trim();
-    if (key && process.env[key] == null) process.env[key] = value;
+    const value = parseEnvValue(trimmed.slice(separator + 1));
+    if (key && shouldApplyEnvValue(process.env[key])) process.env[key] = value;
   }
 }
 
