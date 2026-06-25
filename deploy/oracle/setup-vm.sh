@@ -25,7 +25,10 @@ echo "==> 기본 도구 설치"
 apt-get install -y curl git nginx ufw certbot python3-certbot-nginx
 
 echo "==> Node.js 20 설치"
-if ! command -v node >/dev/null 2>&1 || [[ "$(node -p process.versions.node.split('.')[0])" -lt 20 ]]; then
+if ! command -v node >/dev/null 2>&1; then
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt-get install -y nodejs
+elif [[ "$(node -p 'process.versions.node.split(".")[0]')" -lt 20 ]]; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
 fi
