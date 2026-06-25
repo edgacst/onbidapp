@@ -4941,13 +4941,14 @@ a {
   }
 
   .mypage-profile-body {
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
 
   .mypage-profile-main {
     flex: 1 1 auto;
+    width: 100%;
     min-width: 0;
   }
 
@@ -4969,15 +4970,16 @@ a {
 
   .mypage-profile-actions {
     margin-left: 0;
-    width: auto;
-    flex-shrink: 0;
+    width: 100%;
+    flex-shrink: 1;
   }
 
   .mypage-profile-actions .primary-action,
   .mypage-profile-actions .secondary-action {
-    flex: 0 0 auto;
+    flex: 1 1 0;
+    min-width: 0;
     min-height: 40px;
-    padding: 0 12px;
+    padding: 0 10px;
     font-size: 13px;
   }
 
