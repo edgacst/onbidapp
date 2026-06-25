@@ -1468,6 +1468,39 @@ a {
   gap: 12px;
 }
 
+.mypage-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  margin-left: 6px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e8f1f8;
+  color: #174d75;
+  font-size: 12px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.mypage-activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mypage-activity-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  text-align: left;
+}
+
+.mypage-activity-chevron {
+  flex-shrink: 0;
+  color: #8a96a0;
+}
+
 .mypage-row h2 {
   margin: 0;
   font-size: 18px;
@@ -1600,17 +1633,16 @@ a {
 }
 
 .mypage-activity-card {
-  flex: 0 0 240px;
-  min-width: 240px;
+  width: 100%;
   border: 1px solid #e3e9ee;
   border-radius: 8px;
   background: #fbfcfd;
   padding: 12px;
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   text-align: left;
   cursor: pointer;
-  scroll-snap-align: start;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -1738,9 +1770,11 @@ a {
 
 .app-build-stamp {
   margin: 0;
+  padding: 4px 0 8px;
   text-align: center;
-  color: #9aa8b3;
-  font-size: 11px;
+  color: #7d8b97;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .home-page {
@@ -4540,6 +4574,10 @@ a {
     padding: 12px;
   }
 
+  .workspace--mypage {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+
   .topbar {
     min-height: 42px;
     align-items: center;
@@ -4894,62 +4932,72 @@ a {
   .mypage-page {
     margin-top: 0;
     gap: 10px;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    padding-bottom: 0;
   }
 
   .mypage-row {
-    padding: 14px;
-    scroll-margin-top: 12px;
-  }
-
-  .mypage-row-head {
-    margin-bottom: 10px;
-  }
-
-  .mypage-link-action {
-    min-height: 44px;
-    padding: 0 6px;
+    padding: 12px;
+    scroll-margin-top: 56px;
   }
 
   .mypage-profile-body {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
   }
 
-  .mypage-profile-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .mypage-profile-main {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
-  .mypage-stat-link {
-    min-height: 72px;
+  .mypage-profile-avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .mypage-profile-text strong {
+    font-size: 16px;
+  }
+
+  .mypage-profile-text p {
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .mypage-profile-actions {
     margin-left: 0;
-    width: 100%;
+    width: auto;
+    flex-shrink: 0;
   }
 
   .mypage-profile-actions .primary-action,
   .mypage-profile-actions .secondary-action {
-    flex: 1 1 0;
-    min-height: 44px;
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 0 12px;
+    font-size: 13px;
   }
 
-  .mypage-hscroll {
-    gap: 8px;
-    padding-bottom: 6px;
+  .mypage-row-head h2 {
+    font-size: 16px;
+  }
+
+  .mypage-link-action {
+    min-height: 40px;
+    padding: 0 4px;
+    font-size: 13px;
   }
 
   .mypage-activity-card {
-    flex-basis: min(78vw, 260px);
-    min-width: min(78vw, 260px);
-    min-height: 132px;
+    min-height: 72px;
   }
 
   .mypage-saved-card {
-    flex-basis: min(62vw, 200px);
-    min-width: min(62vw, 200px);
+    flex-basis: min(70vw, 190px);
+    min-width: min(70vw, 190px);
   }
 
   .mypage-empty-card {
@@ -4958,6 +5006,10 @@ a {
 
   .mypage-empty-card .secondary-action {
     min-height: 42px;
+  }
+
+  .app-build-stamp {
+    padding-bottom: 4px;
   }
 
   .board-page {

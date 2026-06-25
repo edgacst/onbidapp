@@ -5080,7 +5080,11 @@ function App() {
   }
 
   function scrollMypageSection(sectionId) {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    const offset = window.matchMedia("(max-width: 760px)").matches ? 64 : 24;
+    const top = section.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
   }
 
   function startCommentReply(questionId, parentId) {
@@ -5215,7 +5219,7 @@ function App() {
         </nav>
       </aside>
 
-      <section className={`workspace${view === "detail" ? " workspace--detail" : ""}`}>
+      <section className={`workspace${view === "detail" ? " workspace--detail" : ""}${view === "mypage" ? " workspace--mypage" : ""}`}>
         <header className="topbar">
           <div>
             <h1>
@@ -5864,14 +5868,6 @@ function App() {
                     <p>{member ? member.email : "로그인하면 관심 물건과 질문 이력을 저장할 수 있습니다."}</p>
                   </div>
                 </div>
-                <div className="profile-stats mypage-profile-stats">
-                  <button type="button" className="mypage-stat-link" onClick={() => scrollMypageSection("mypage-saved")}>
-                    <span>찜한 물건</span><strong>{saved.length}건</strong>
-                  </button>
-                  <button type="button" className="mypage-stat-link" onClick={() => scrollMypageSection("mypage-activity")}>
-                    <span>질문</span><strong>{myActivityQuestions.length}건</strong>
-                  </button>
-                </div>
                 <div className="mypage-profile-actions">
                   {member ? (
                     <button className="secondary-action" type="button" onClick={() => setMember(null)}>로그아웃</button>
@@ -5879,7 +5875,7 @@ function App() {
                     <button className="primary-action" type="button" onClick={() => openView("login")}>로그인하기</button>
                   )}
                   {isAdminMember(member) && (
-                    <button className="primary-action" type="button" onClick={openAdminDashboard}>관리자 대시보드</button>
+                    <button className="primary-action" type="button" onClick={openAdminDashboard}>관리자</button>
                   )}
                 </div>
               </div>
@@ -5887,12 +5883,12 @@ function App() {
 
             <section className="service-card mypage-row mypage-activity" id="mypage-activity">
               <div className="mypage-row-head">
-                <h2>내 활동내역</h2>
+                <h2>내 활동내역 <span className="mypage-count">{myActivityQuestions.length}</span></h2>
                 <button type="button" className="plain-action mypage-link-action" onClick={() => openView("board")}>
-                  전체 보기 <ChevronRight size={14} />
+                  전체 <ChevronRight size={14} />
                 </button>
               </div>
-              <div className="mypage-hscroll mypage-activity-list">
+              <div className="mypage-activity-list">
                 {myActivityQuestions.length > 0 ? myActivityQuestions.map((question) => (
                   <button
                     key={question.id}
@@ -5900,10 +5896,12 @@ function App() {
                     className="mypage-activity-card"
                     onClick={() => openBoardQuestion(question.id)}
                   >
-                    <span>{question.status}</span>
-                    <strong>{question.title || question.body}</strong>
-                    <small>{question.category || "일반"} · {question.createdAt}</small>
-                    <em className="mypage-card-link">질문 보기</em>
+                    <div className="mypage-activity-main">
+                      <span>{question.status}</span>
+                      <strong>{question.title || question.body}</strong>
+                      <small>{question.category || "일반"} · {question.createdAt}</small>
+                    </div>
+                    <ChevronRight size={18} className="mypage-activity-chevron" aria-hidden="true" />
                   </button>
                 )) : (
                   <div className="mypage-empty-card">
@@ -5916,9 +5914,9 @@ function App() {
 
             <section className="service-card mypage-row mypage-saved" id="mypage-saved">
               <div className="mypage-row-head">
-                <h2>찜한 물건</h2>
+                <h2>찜한 물건 <span className="mypage-count">{saved.length}</span></h2>
                 <button type="button" className="plain-action mypage-link-action" onClick={() => openView("watch")}>
-                  전체 보기 <ChevronRight size={14} />
+                  전체 <ChevronRight size={14} />
                 </button>
               </div>
               <div className="mypage-hscroll mypage-saved-list">
@@ -5942,7 +5940,7 @@ function App() {
                 )}
               </div>
             </section>
-            <p className="app-build-stamp" aria-hidden="true">v{APP_BUILD.replace("T", " ").slice(0, 19)}</p>
+            <p className="app-build-stamp">빌드 {APP_BUILD.replace("T", " ").slice(0, 19)}</p>
           </section>
         ) : view === "detail" && selected ? (
           <section className="detail-page">
