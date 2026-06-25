@@ -11,6 +11,7 @@
     "phone:dev": "node scripts/dev-phone.mjs",
     "phone:prod": "node scripts/phone-launch.mjs --port 3000 --server prod --keep-alive",
     "build": "node scripts/build.mjs",
+    "build:prod": "node scripts/build-prod.mjs",
     "build:phone": "node scripts/build-phone.mjs",
     "build:inner": "vite build",
     "preview": "vite preview --host 0.0.0.0",
@@ -22,6 +23,7 @@
     "logs": "powershell -NoProfile -Command \"Get-Content -Path logs/server.log -Tail 40 -Encoding utf8 -Wait\"",
     "prod": "node scripts/build.mjs && node scripts/restart-server.mjs",
     "refresh": "node scripts/build.mjs && node scripts/ensure-build.mjs",
+    "deploy:oracle": "node scripts/deploy-oracle.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "start:phone": "node scripts/build.mjs && node scripts/phone-launch.mjs --port 3000 --server prod --keep-alive"
   },

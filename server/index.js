@@ -43,6 +43,7 @@ function pruneApiCache() {
 }
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "32kb" }));
 
 app.post("/api/members/welcome", async (req, res) => {
