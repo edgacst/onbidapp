@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readdirSync, statSync } from "node:fs";
+import authRoutes, { seedPrimaryAdmin } from "./auth-routes.js";
+import { getDatabasePath, initDatabase } from "./db.js";
 import { loadEnvFiles } from "./load-env.js";
 import { isMailConfigured, sendWelcomeEmail } from "./send-mail.js";
 
@@ -45,6 +47,11 @@ function pruneApiCache() {
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "32kb" }));
+
+await initDatabase();
+await seedPrimaryAdmin();
+
+app.use("/api/auth", authRoutes);
 
 app.post("/api/members/welcome", async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
@@ -222,6 +229,7 @@ function printServerUrls(port) {
   } else {
     console.log("   메일: SMTP 미설정 — 회원가입 환영 메일 비활성");
   }
+  console.log(`   DB: ${getDatabasePath()}`);
 }
 
 const server = app.listen(port, "0.0.0.0", () => {

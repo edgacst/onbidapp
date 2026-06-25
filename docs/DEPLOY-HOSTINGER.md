@@ -82,8 +82,37 @@ nginx :80/:443
 
 ## 업데이트
 
+코드 수정 후 서버에서 아래 명령을 실행하세요.
+
 ```bash
-bash /opt/onbidapp/deploy/oracle/update-app.sh
+cd /opt/onbidapp
+git pull
+bash deploy/oracle/update-app.sh
+```
+
+또는 한 줄:
+
+```bash
+cd /opt/onbidapp && git pull && bash deploy/oracle/update-app.sh
 ```
 
 nginx는 건드리지 않고 앱만 재시작합니다.
+
+---
+
+## 회원 DB (SQLite)
+
+bizgrant PostgreSQL과 **별도**로 `/opt/onbidapp/data/members.sqlite` 파일에 저장됩니다.
+
+서버 `.env`에 아래를 추가하세요.
+
+```env
+DATABASE_PATH=/opt/onbidapp/data/members.sqlite
+ADMIN_EMAIL=freecompr20@gmail.com
+ADMIN_PASSWORD=관리자_비밀번호
+SESSION_TTL_DAYS=30
+```
+
+- `ADMIN_PASSWORD`는 최초 기동 시 관리자 계정을 시드합니다.
+- 기존 localStorage 회원은 서버 DB에 없으므로 **다시 회원가입**이 필요합니다.
+- DB 백업: `cp /opt/onbidapp/data/members.sqlite ~/members-backup-$(date +%F).sqlite`

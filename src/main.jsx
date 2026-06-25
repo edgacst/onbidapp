@@ -1,6 +1,17 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  authLogin,
+  authLogout,
+  authMe,
+  authSignup,
+  fetchMembers,
+  getAuthToken,
+  patchMember,
+  removeMember,
+  setAuthToken,
+} from "./auth-api.js";
+import {
   AlertCircle,
   Bell,
   Building2,
@@ -276,16 +287,10 @@ const defaultNotices = [
   },
 ];
 
-function isAdminAccount(email, password) {
-  return String(email || "").trim().toLowerCase() === "freecompr20@gmail.com"
-    && String(password || "") === "kim14356!!";
-}
-
 function isAdminMember(member) {
   return member?.role === "admin";
 }
 
-const MEMBERS_STORAGE_KEY = "auctionMembers";
 const PRIMARY_ADMIN_EMAIL = "freecompr20@gmail.com";
 
 function normalizeMemberEmail(email) {
@@ -305,44 +310,6 @@ function formatMemberDate(value) {
   });
 }
 
-function readMemberRegistry() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(MEMBERS_STORAGE_KEY) || "[]");
-    return Array.isArray(stored) ? stored : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeMemberRegistry(members) {
-  localStorage.setItem(MEMBERS_STORAGE_KEY, JSON.stringify(members));
-}
-
-function createMemberRecord({ email, name, password, role = "member" }) {
-  return {
-    id: `member-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    email: normalizeMemberEmail(email),
-    name: String(name || "").trim() || normalizeMemberEmail(email).split("@")[0] || "회원",
-    password: String(password || ""),
-    role,
-    status: "active",
-    joinedAt: new Date().toISOString(),
-  };
-}
-
-function ensureMemberRegistry() {
-  const members = readMemberRegistry();
-  const adminEmail = normalizeMemberEmail(PRIMARY_ADMIN_EMAIL);
-  if (members.some((item) => normalizeMemberEmail(item.email) === adminEmail)) {
-    return members;
-  }
-  return members;
-}
-
-function isPrimaryAdminEmail(email) {
-  return normalizeMemberEmail(email) === normalizeMemberEmail(PRIMARY_ADMIN_EMAIL);
-}
-
 function memberToSession(record) {
   return {
     id: record.id,
@@ -353,13 +320,8 @@ function memberToSession(record) {
   };
 }
 
-function upsertMemberRecord(members, record) {
-  const email = normalizeMemberEmail(record.email);
-  const index = members.findIndex((item) => normalizeMemberEmail(item.email) === email);
-  if (index === -1) return [...members, record];
-  const next = [...members];
-  next[index] = { ...next[index], ...record, email };
-  return next;
+function isPrimaryAdminEmail(email) {
+  return normalizeMemberEmail(email) === normalizeMemberEmail(PRIMARY_ADMIN_EMAIL);
 }
 
 async function sendSignupWelcomeEmail(record) {
@@ -4022,14 +3984,8 @@ function App() {
   const [galleryPhotos, setGalleryPhotos] = useState([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [error, setError] = useState("");
-  const [member, setMember] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("auctionMember") || "null");
-    } catch {
-      return null;
-    }
-  });
-  const [members, setMembers] = useState(() => ensureMemberRegistry());
+  const [member, setMember] = useState(null);
+  const [members, setMembers] = useState([]);
   const [memberQuery, setMemberQuery] = useState("");
   const [authError, setAuthError] = useState("");
   const [serviceNotice, setServiceNotice] = useState("");
@@ -4457,13 +4413,37 @@ function App() {
   }, [notices]);
 
   useEffect(() => {
-    if (member) localStorage.setItem("auctionMember", JSON.stringify(member));
-    else localStorage.removeItem("auctionMember");
-  }, [member]);
+    let cancelled = false;
+    if (!getAuthToken()) return undefined;
+    authMe()
+      .then((payload) => {
+        if (!cancelled && payload?.member) {
+          setMember(memberToSession(payload.member));
+        }
+      })
+      .catch(() => {
+        setAuthToken("");
+        if (!cancelled) setMember(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    writeMemberRegistry(members);
-  }, [members]);
+    if (view !== "admin" || !isAdminMember(member)) return;
+    let cancelled = false;
+    fetchMembers()
+      .then((list) => {
+        if (!cancelled) setMembers(list);
+      })
+      .catch(() => {
+        if (!cancelled) setMembers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, member?.id, member?.role]);
 
   useEffect(() => {
     const parsedRoute = resolveRouteForViewport(parseAppHash(window.location.hash));
@@ -4889,7 +4869,7 @@ function App() {
     runQuickSearch();
   }
 
-  function submitAuth(event) {
+  async function submitAuth(event) {
     event.preventDefault();
     setAuthError("");
 
@@ -4906,87 +4886,86 @@ function App() {
       return;
     }
 
-    if (view === "signup") {
-      if (password.length < 6) {
-        setAuthError("비밀번호는 6자 이상이어야 합니다.");
+    try {
+      if (view === "signup") {
+        if (password.length < 6) {
+          setAuthError("비밀번호는 6자 이상이어야 합니다.");
+          return;
+        }
+        const result = await authSignup({ email, name, password });
+        const record = result.member;
+        setMember(memberToSession(record));
+        setAuthForm({ name: "", email: "", password: "" });
+        pushAppHistory(record.role === "admin" ? "admin" : "mypage");
+        setView(record.role === "admin" ? "admin" : "mypage");
+        void sendSignupWelcomeEmail(record).then((welcome) => {
+          setServiceNotice(welcome.ok
+            ? "회원가입이 완료되었습니다. 입력하신 이메일로 환영 메일을 보냈습니다."
+            : "회원가입이 완료되었습니다.");
+        });
         return;
       }
-      if (members.some((item) => normalizeMemberEmail(item.email) === email)) {
-        setAuthError("이미 가입된 이메일입니다.");
-        return;
+
+      const result = await authLogin({ email, password });
+      const record = result.member;
+      setMember(memberToSession(record));
+      setAuthForm({ name: "", email: "", password: "" });
+      pushAppHistory(record.role === "admin" ? "admin" : "mypage");
+      setView(record.role === "admin" ? "admin" : "mypage");
+    } catch (err) {
+      setAuthError(err?.message || "로그인에 실패했습니다.");
+    }
+  }
+
+  async function refreshMembers() {
+    if (!isAdminMember(member)) return;
+    const list = await fetchMembers();
+    setMembers(list);
+  }
+
+  async function updateMemberRole(memberId, nextRole) {
+    if (!isAdminMember(member)) return;
+    try {
+      await patchMember(memberId, { role: nextRole });
+      await refreshMembers();
+      if (member?.id === memberId) {
+        setMember((current) => (current ? { ...current, role: nextRole } : current));
       }
-      const role = isAdminAccount(email, password) ? "admin" : "member";
-      const record = createMemberRecord({ email, name, password, role });
-      setMembers((current) => [...current, record]);
-      setMember(memberToSession(record));
-      setAuthForm({ name: "", email: "", password: "" });
-      pushAppHistory(role === "admin" ? "admin" : "mypage");
-      setView(role === "admin" ? "admin" : "mypage");
-      void sendSignupWelcomeEmail(record).then((result) => {
-        setServiceNotice(result.ok
-          ? "회원가입이 완료되었습니다. 입력하신 이메일로 환영 메일을 보냈습니다."
-          : "회원가입이 완료되었습니다.");
-      });
-      return;
-    }
-
-    if (isAdminAccount(email, password)) {
-      const record = createMemberRecord({
-        email,
-        name: name || "관리자",
-        password,
-        role: "admin",
-      });
-      setMembers((current) => upsertMemberRecord(current, record));
-      setMember(memberToSession(record));
-      setAuthForm({ name: "", email: "", password: "" });
-      pushAppHistory("admin");
-      setView("admin");
-      return;
-    }
-
-    const found = members.find((item) => normalizeMemberEmail(item.email) === email);
-    if (!found || found.password !== password) {
-      setAuthError("이메일 또는 비밀번호가 올바르지 않습니다.");
-      return;
-    }
-    if (found.status === "blocked") {
-      setAuthError("차단된 계정입니다. 관리자에게 문의하세요.");
-      return;
-    }
-
-    setMember(memberToSession(found));
-    setAuthForm({ name: "", email: "", password: "" });
-    pushAppHistory(found.role === "admin" ? "admin" : "mypage");
-    setView(found.role === "admin" ? "admin" : "mypage");
-  }
-
-  function updateMemberRole(memberId, nextRole) {
-    if (!isAdminMember(member)) return;
-    setMembers((current) => current.map((item) => {
-      if (item.id !== memberId) return item;
-      if (isPrimaryAdminEmail(item.email) && nextRole !== "admin") return item;
-      return { ...item, role: nextRole };
-    }));
-    if (member?.id === memberId) {
-      setMember((current) => (current ? { ...current, role: nextRole } : current));
+    } catch (err) {
+      setServiceNotice(err?.message || "역할 변경에 실패했습니다.");
     }
   }
 
-  function toggleMemberStatus(memberId) {
-    if (!isAdminMember(member)) return;
-    setMembers((current) => current.map((item) => {
-      if (item.id !== memberId) return item;
-      if (isPrimaryAdminEmail(item.email) || member?.id === memberId) return item;
-      return { ...item, status: item.status === "blocked" ? "active" : "blocked" };
-    }));
-  }
-
-  function deleteMemberRecord(memberId) {
+  async function toggleMemberStatus(memberId) {
     if (!isAdminMember(member)) return;
     const target = members.find((item) => item.id === memberId);
     if (!target || isPrimaryAdminEmail(target.email) || member?.id === memberId) return;
-    setMembers((current) => current.filter((item) => item.id !== memberId));
+    const nextStatus = target.status === "blocked" ? "active" : "blocked";
+    try {
+      await patchMember(memberId, { status: nextStatus });
+      await refreshMembers();
+    } catch (err) {
+      setServiceNotice(err?.message || "상태 변경에 실패했습니다.");
+    }
+  }
+
+  async function deleteMemberRecord(memberId) {
+    if (!isAdminMember(member)) return;
+    const target = members.find((item) => item.id === memberId);
+    if (!target || isPrimaryAdminEmail(target.email) || member?.id === memberId) return;
+    try {
+      await removeMember(memberId);
+      await refreshMembers();
+    } catch (err) {
+      setServiceNotice(err?.message || "회원 삭제에 실패했습니다.");
+    }
+  }
+
+  async function handleLogout() {
+    await authLogout().catch(() => {});
+    setMember(null);
+    pushAppHistory("home");
+    setView("home");
   }
 
   const filteredMembers = useMemo(() => {
@@ -5784,7 +5763,7 @@ function App() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="muted admin-member-note">회원 정보는 이 브라우저(localStorage)에 저장됩니다. 서버 DB 연동 전까지는 기기·브라우저마다 목록이 다를 수 있습니다.</p>
+                  <p className="muted admin-member-note">회원 정보는 서버 DB에 저장됩니다. 기기·브라우저가 달라도 동일 계정으로 로그인할 수 있습니다.</p>
                 </section>
 
                 <section className="admin-panel-grid">
@@ -5870,7 +5849,7 @@ function App() {
                 </div>
                 <div className="mypage-profile-actions">
                   {member ? (
-                    <button className="secondary-action" type="button" onClick={() => setMember(null)}>로그아웃</button>
+                    <button className="secondary-action" type="button" onClick={() => void handleLogout()}>로그아웃</button>
                   ) : (
                     <button className="primary-action" type="button" onClick={() => openView("login")}>로그인하기</button>
                   )}

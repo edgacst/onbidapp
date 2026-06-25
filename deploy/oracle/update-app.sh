@@ -22,6 +22,10 @@ echo "==> git pull"
 echo "==> npm install"
 "${RUN_AS[@]}" npm install
 
+echo "==> data directory"
+mkdir -p "${APP_DIR}/data"
+chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}/data" 2>/dev/null || true
+
 echo "==> build"
 "${RUN_AS[@]}" node scripts/build-prod.mjs
 
