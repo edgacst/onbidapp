@@ -2326,19 +2326,44 @@ function LotDetailPanel({
     return tabBarHeight + 20;
   }
 
+  function getSectionScrollTarget(section) {
+    const heading = section.querySelector("h3");
+    if (!heading) return section;
+    const hidden = heading.offsetParent === null
+      || window.getComputedStyle(heading).display === "none"
+      || heading.offsetHeight === 0;
+    return hidden ? section : heading;
+  }
+
+  function scrollTabButtonIntoView(tabId) {
+    const tabButton = tabsBarRef.current?.querySelector(`[aria-controls="lot-detail-section-${tabId}"]`);
+    const tabsScroller = tabsBarRef.current?.querySelector(".lot-detail-tabs");
+    if (!tabButton || !tabsScroller) return;
+
+    const scrollerRect = tabsScroller.getBoundingClientRect();
+    const buttonRect = tabButton.getBoundingClientRect();
+    const nextLeft = tabsScroller.scrollLeft
+      + (buttonRect.left - scrollerRect.left)
+      - (scrollerRect.width - buttonRect.width) / 2;
+    tabsScroller.scrollTo({
+      left: Math.max(0, nextLeft),
+      behavior: "smooth",
+    });
+  }
+
   function scrollDetailSection(tabId) {
     const section = sectionRefs.current[tabId];
     if (!section) return false;
 
-    const heading = section.querySelector("h3") || section;
+    const target = getSectionScrollTarget(section);
     const tabOffset = getDetailTabOffset();
     const scrollRoot = getDetailScrollRoot();
     if (scrollRoot) {
       const rootRect = scrollRoot.getBoundingClientRect();
-      const headingRect = heading.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
       const maxScroll = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
       const top = Math.min(
-        Math.max(0, scrollRoot.scrollTop + (headingRect.top - rootRect.top) - tabOffset),
+        Math.max(0, scrollRoot.scrollTop + (targetRect.top - rootRect.top) - tabOffset),
         maxScroll,
       );
       scrollRoot.scrollTo({ top, behavior: "smooth" });
@@ -2347,7 +2372,7 @@ function LotDetailPanel({
 
     const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     const top = Math.min(
-      Math.max(0, heading.getBoundingClientRect().top + window.scrollY - tabOffset),
+      Math.max(0, target.getBoundingClientRect().top + window.scrollY - tabOffset),
       maxScroll,
     );
     window.scrollTo({ top, behavior: "smooth" });
@@ -2360,8 +2385,7 @@ function LotDetailPanel({
     lockedTabIdRef.current = tabId;
     lockedTabUntilRef.current = Date.now() + 1800;
 
-    const tabButton = tabsBarRef.current?.querySelector(`[aria-controls="lot-detail-section-${tabId}"]`);
-    tabButton?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    scrollTabButtonIntoView(tabId);
 
     const runScroll = () => scrollDetailSection(tabId);
 
