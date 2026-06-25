@@ -5531,7 +5531,12 @@ a {
   }
 
   .lot-detail-tab-section h3 {
-    display: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 10px;
+    font-size: 15px;
+    color: #151b23;
   }
 
   .lot-detail-tab-section + .lot-detail-tab-section {
