@@ -4232,11 +4232,11 @@ a {
   .nav-list {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
   }
 
-  .nav-list button:nth-child(n + 5) {
+  .nav-list button:not(.nav-mobile) {
     display: none;
   }
 
@@ -4244,10 +4244,10 @@ a {
     min-height: 50px;
     flex-direction: column;
     justify-content: center;
-    gap: 4px;
-    padding: 5px 4px;
+    gap: 3px;
+    padding: 5px 2px;
     border-radius: 12px;
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .nav-list button svg {

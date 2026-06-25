@@ -5135,16 +5135,16 @@ function App() {
         </div>
 
         <nav className="nav-list" aria-label="주 메뉴">
-          <button className={view === "home" ? "active" : ""} onClick={() => openView("home")}><Home size={18} /> 홈</button>
-          <button className={view === "search" || view === "detail" ? "active" : ""} onClick={() => openView("search")}><Search size={18} /> 탐색</button>
-          <button className={view === "watch" ? "active" : ""} onClick={() => openView("watch")}><Heart size={18} /> 관심</button>
-          <button className={view === "map" ? "active" : ""} onClick={() => openView("map")}><MapIcon size={18} /> 지도</button>
+          <button className={`nav-mobile ${view === "home" ? "active" : ""}`} onClick={() => openView("home")}><Home size={18} /> 홈</button>
+          <button className={`nav-mobile ${view === "search" || view === "detail" ? "active" : ""}`} onClick={() => openView("search")}><Search size={18} /> 탐색</button>
+          <button className={`nav-mobile ${view === "watch" ? "active" : ""}`} onClick={() => openView("watch")}><Heart size={18} /> 관심</button>
+          <button className={`nav-mobile ${view === "map" ? "active" : ""}`} onClick={() => openView("map")}><MapIcon size={18} /> 지도</button>
           <button className={view === "board" ? "active" : ""} onClick={() => openView("board")}><MessageCircleQuestion size={18} /> 질문</button>
           <button className={view === "notice" ? "active" : ""} onClick={openNoticeBoard}><Bell size={18} /> 공지</button>
           {isAdminMember(member) && (
             <button className={view === "admin" ? "active" : ""} onClick={openAdminDashboard}><LayoutDashboard size={18} /> 관리자</button>
           )}
-          <button className={view === "mypage" ? "active" : ""} onClick={() => openView("mypage")}><User size={18} /> 내정보</button>
+          <button className={`nav-mobile ${view === "mypage" || view === "login" || view === "signup" ? "active" : ""}`} onClick={() => openView(member ? "mypage" : "login")}><User size={18} /> 내정보</button>
         </nav>
       </aside>
 
