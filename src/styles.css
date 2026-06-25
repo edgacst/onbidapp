@@ -1530,6 +1530,46 @@ a {
   grid-template-columns: repeat(2, minmax(110px, 1fr));
 }
 
+.mypage-stat-link {
+  border: 0;
+  border-radius: 8px;
+  background: #f1f6f9;
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mypage-stat-link:active {
+  background: #e5eef4;
+}
+
+.mypage-stat-link span,
+.mypage-stat-link strong {
+  display: block;
+}
+
+.mypage-stat-link span {
+  color: #647381;
+  font-size: 13px;
+}
+
+.mypage-stat-link strong {
+  margin-top: 4px;
+  font-size: 22px;
+  color: #151b23;
+}
+
+.mypage-link-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 36px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
 .mypage-profile-actions {
   display: flex;
   align-items: center;
@@ -1544,6 +1584,7 @@ a {
   overflow-x: auto;
   padding-bottom: 4px;
   overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -1567,6 +1608,17 @@ a {
   padding: 12px;
   display: grid;
   gap: 6px;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: start;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mypage-activity-card:active {
+  border-color: #c8d6e2;
+  box-shadow: 0 4px 14px rgba(30, 49, 65, 0.08);
 }
 
 .mypage-activity-card span {
@@ -1593,6 +1645,30 @@ a {
   font-size: 12px;
 }
 
+.mypage-card-link {
+  margin-top: 2px;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+  color: #174d75;
+}
+
+.mypage-empty-card {
+  flex: 1 1 auto;
+  min-width: min(100%, 280px);
+  border: 1px dashed #d5dee6;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.mypage-empty-card p {
+  margin: 0;
+}
+
 .mypage-saved-card {
   flex: 0 0 220px;
   min-width: 220px;
@@ -1601,6 +1677,13 @@ a {
   overflow: hidden;
   background: #fbfcfd;
   cursor: pointer;
+  scroll-snap-align: start;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mypage-saved-card:active {
+  opacity: 0.92;
 }
 
 .mypage-saved-card img,
@@ -4801,9 +4884,38 @@ a {
     margin-top: 14px;
   }
 
+  .mypage-page {
+    margin-top: 0;
+    gap: 10px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .mypage-row {
+    padding: 14px;
+    scroll-margin-top: 12px;
+  }
+
+  .mypage-row-head {
+    margin-bottom: 10px;
+  }
+
+  .mypage-link-action {
+    min-height: 44px;
+    padding: 0 6px;
+  }
+
   .mypage-profile-body {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
+  }
+
+  .mypage-profile-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mypage-stat-link {
+    min-height: 72px;
   }
 
   .mypage-profile-actions {
@@ -4814,16 +4926,31 @@ a {
   .mypage-profile-actions .primary-action,
   .mypage-profile-actions .secondary-action {
     flex: 1 1 0;
+    min-height: 44px;
+  }
+
+  .mypage-hscroll {
+    gap: 8px;
+    padding-bottom: 6px;
   }
 
   .mypage-activity-card {
-    flex-basis: 210px;
-    min-width: 210px;
+    flex-basis: min(78vw, 260px);
+    min-width: min(78vw, 260px);
+    min-height: 132px;
   }
 
   .mypage-saved-card {
-    flex-basis: 180px;
-    min-width: 180px;
+    flex-basis: min(62vw, 200px);
+    min-width: min(62vw, 200px);
+  }
+
+  .mypage-empty-card {
+    width: 100%;
+  }
+
+  .mypage-empty-card .secondary-action {
+    min-height: 42px;
   }
 
   .board-page {

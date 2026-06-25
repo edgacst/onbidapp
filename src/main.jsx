@@ -4158,6 +4158,17 @@ function App() {
     setEditCommentDraft("");
   }, [boardSearch, boardStatus]);
 
+  useEffect(() => {
+    if (view !== "board" || !openQuestionId) return undefined;
+    const timer = window.setTimeout(() => {
+      document.querySelector(`[data-question-id="${openQuestionId}"]`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [view, openQuestionId, filteredQuestions.length]);
+
   const sortedLots = useMemo(() => {
     const base = data.sample ? sampleLots : data.lots;
     const viewFiltered = view === "watch" ? base.filter((lot) => saved.includes(lot.id)) : base;
@@ -5029,6 +5040,20 @@ function App() {
     setCommentDraft("");
   }
 
+  function openBoardQuestion(questionId) {
+    setBoardWriteOpen(false);
+    setBoardSearch("");
+    setBoardStatus("all");
+    pushAppHistory("board");
+    setView("board");
+    scrollPageToTop();
+    window.setTimeout(() => setOpenQuestionId(questionId), 0);
+  }
+
+  function scrollMypageSection(sectionId) {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function startCommentReply(questionId, parentId) {
     cancelCommentEdit();
     setReplyingTo({ questionId, parentId });
@@ -5422,7 +5447,7 @@ function App() {
                 {filteredQuestions.map((question) => {
                   const isOpen = openQuestionId === question.id;
                   return (
-                  <article className={`board-card ${isOpen ? "expanded" : ""}`} key={question.id}>
+                  <article className={`board-card ${isOpen ? "expanded" : ""}`} key={question.id} data-question-id={question.id}>
                     <div className="board-row">
                       <button
                         className="board-title"
@@ -5798,7 +5823,7 @@ function App() {
               <p className="service-notice" role="status">{serviceNotice}</p>
             )}
 
-            <section className="service-card mypage-row mypage-profile">
+            <section className="service-card mypage-row mypage-profile" id="mypage-profile">
               <h2>내정보</h2>
               <div className="mypage-profile-body">
                 <div className="mypage-profile-main">
@@ -5811,8 +5836,12 @@ function App() {
                   </div>
                 </div>
                 <div className="profile-stats mypage-profile-stats">
-                  <div><span>찜한 물건</span><strong>{saved.length}건</strong></div>
-                  <div><span>질문</span><strong>{myActivityQuestions.length}건</strong></div>
+                  <button type="button" className="mypage-stat-link" onClick={() => scrollMypageSection("mypage-saved")}>
+                    <span>찜한 물건</span><strong>{saved.length}건</strong>
+                  </button>
+                  <button type="button" className="mypage-stat-link" onClick={() => scrollMypageSection("mypage-activity")}>
+                    <span>질문</span><strong>{myActivityQuestions.length}건</strong>
+                  </button>
                 </div>
                 <div className="mypage-profile-actions">
                   {member ? (
@@ -5827,28 +5856,41 @@ function App() {
               </div>
             </section>
 
-            <section className="service-card mypage-row mypage-activity">
+            <section className="service-card mypage-row mypage-activity" id="mypage-activity">
               <div className="mypage-row-head">
                 <h2>내 활동내역</h2>
-                <button type="button" className="plain-action" onClick={() => openView("board")}>전체 보기</button>
+                <button type="button" className="plain-action mypage-link-action" onClick={() => openView("board")}>
+                  전체 보기 <ChevronRight size={14} />
+                </button>
               </div>
               <div className="mypage-hscroll mypage-activity-list">
                 {myActivityQuestions.length > 0 ? myActivityQuestions.map((question) => (
-                  <article key={question.id} className="mypage-activity-card">
+                  <button
+                    key={question.id}
+                    type="button"
+                    className="mypage-activity-card"
+                    onClick={() => openBoardQuestion(question.id)}
+                  >
                     <span>{question.status}</span>
                     <strong>{question.title || question.body}</strong>
                     <small>{question.category || "일반"} · {question.createdAt}</small>
-                  </article>
+                    <em className="mypage-card-link">질문 보기</em>
+                  </button>
                 )) : (
-                  <p className="muted mypage-empty-inline">아직 활동 내역이 없습니다.</p>
+                  <div className="mypage-empty-card">
+                    <p className="muted">아직 활동 내역이 없습니다.</p>
+                    <button type="button" className="secondary-action" onClick={() => openView("board")}>질문게시판 가기</button>
+                  </div>
                 )}
               </div>
             </section>
 
-            <section className="service-card mypage-row mypage-saved">
+            <section className="service-card mypage-row mypage-saved" id="mypage-saved">
               <div className="mypage-row-head">
                 <h2>찜한 물건</h2>
-                <button type="button" className="plain-action" onClick={() => openView("watch")}>전체 보기</button>
+                <button type="button" className="plain-action mypage-link-action" onClick={() => openView("watch")}>
+                  전체 보기 <ChevronRight size={14} />
+                </button>
               </div>
               <div className="mypage-hscroll mypage-saved-list">
                 {mySavedLots.length > 0 ? mySavedLots.map((lot) => (
@@ -5864,7 +5906,10 @@ function App() {
                     </div>
                   </article>
                 )) : (
-                  <p className="muted mypage-empty-inline">찜한 물건이 없습니다. 탐색에서 하트를 눌러 저장하세요.</p>
+                  <div className="mypage-empty-card">
+                    <p className="muted">찜한 물건이 없습니다.</p>
+                    <button type="button" className="secondary-action" onClick={() => openView("search")}>물건 탐색하기</button>
+                  </div>
                 )}
               </div>
             </section>
