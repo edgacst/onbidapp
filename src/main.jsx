@@ -3988,7 +3988,8 @@ function App() {
   const [members, setMembers] = useState([]);
   const [memberQuery, setMemberQuery] = useState("");
   const [authError, setAuthError] = useState("");
-  const [serviceNotice, setServiceNotice] = useState("");
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [boardSearch, setBoardSearch] = useState("");
   const [boardStatus, setBoardStatus] = useState("all");
@@ -4445,6 +4446,18 @@ function App() {
     };
   }, [view, member?.id, member?.role]);
 
+  useEffect(() => () => {
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+  }, []);
+
+  function showToast(message, variant = "success") {
+    const text = String(message || "").trim();
+    if (!text) return;
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    setToast({ message: text, variant });
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 3200);
+  }
+
   useEffect(() => {
     const parsedRoute = resolveRouteForViewport(parseAppHash(window.location.hash));
     const { view: initialView, selectedId: initialSelectedId } = parsedRoute;
@@ -4898,10 +4911,9 @@ function App() {
         setAuthForm({ name: "", email: "", password: "" });
         pushAppHistory(record.role === "admin" ? "admin" : "mypage");
         setView(record.role === "admin" ? "admin" : "mypage");
+        showToast("회원가입이 완료되었습니다.");
         void sendSignupWelcomeEmail(record).then((welcome) => {
-          setServiceNotice(welcome.ok
-            ? "회원가입이 완료되었습니다. 입력하신 이메일로 환영 메일을 보냈습니다."
-            : "회원가입이 완료되었습니다.");
+          if (welcome.ok) showToast("입력하신 이메일로 환영 메일을 보냈습니다.");
         });
         return;
       }
@@ -4912,6 +4924,7 @@ function App() {
       setAuthForm({ name: "", email: "", password: "" });
       pushAppHistory(record.role === "admin" ? "admin" : "mypage");
       setView(record.role === "admin" ? "admin" : "mypage");
+      showToast(`${record.name}님, 로그인되었습니다.`);
     } catch (err) {
       setAuthError(err?.message || "로그인에 실패했습니다.");
     }
@@ -4932,7 +4945,7 @@ function App() {
         setMember((current) => (current ? { ...current, role: nextRole } : current));
       }
     } catch (err) {
-      setServiceNotice(err?.message || "역할 변경에 실패했습니다.");
+      showToast(err?.message || "역할 변경에 실패했습니다.", "error");
     }
   }
 
@@ -4945,7 +4958,7 @@ function App() {
       await patchMember(memberId, { status: nextStatus });
       await refreshMembers();
     } catch (err) {
-      setServiceNotice(err?.message || "상태 변경에 실패했습니다.");
+      showToast(err?.message || "상태 변경에 실패했습니다.", "error");
     }
   }
 
@@ -4957,15 +4970,17 @@ function App() {
       await removeMember(memberId);
       await refreshMembers();
     } catch (err) {
-      setServiceNotice(err?.message || "회원 삭제에 실패했습니다.");
+      showToast(err?.message || "회원 삭제에 실패했습니다.", "error");
     }
   }
 
   async function handleLogout() {
+    const memberName = member?.name;
     await authLogout().catch(() => {});
     setMember(null);
     pushAppHistory("home");
     setView("home");
+    showToast(memberName ? `${memberName}님, 로그아웃되었습니다.` : "로그아웃되었습니다.");
   }
 
   const filteredMembers = useMemo(() => {
@@ -5831,10 +5846,6 @@ function App() {
           </section>
         ) : view === "mypage" ? (
           <section className="service-page mypage-page">
-            {serviceNotice && (
-              <p className="service-notice" role="status">{serviceNotice}</p>
-            )}
-
             <section className="service-card mypage-row mypage-profile" id="mypage-profile">
               <h2>내정보</h2>
               <div className="mypage-profile-body">
@@ -6174,6 +6185,13 @@ function App() {
             <Loader2 className="spin" size={36} />
             <p>검색 중입니다. 잠시만 기다려주세요.</p>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className={`app-toast app-toast-${toast.variant}`} role="status" aria-live="polite">
+          {toast.variant === "error" ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
+          <span>{toast.message}</span>
         </div>
       )}
     </main>
