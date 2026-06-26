@@ -4800,6 +4800,7 @@ function App() {
   }
 
   function openView(nextView) {
+    if (["search", "watch", "map", "detail"].includes(nextView) && !ensureSearchAllowed()) return;
     if (view === "detail" && nextView === "search") {
       closeDetail();
       return;
@@ -4827,6 +4828,7 @@ function App() {
   }
 
   function openBidCheck() {
+    if (!ensureSearchAllowed()) return;
     setStatusFocus("");
     setCheckMode(true);
     setSortBy("deadline");
@@ -4835,6 +4837,7 @@ function App() {
   }
 
   function openDetail(id) {
+    if (!ensureSearchAllowed()) return;
     setSelectedId(id);
     pushAppHistory("detail", id);
     setView("detail");
