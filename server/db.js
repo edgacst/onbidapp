@@ -61,6 +61,7 @@ function rowToMember(row) {
     role: row.role,
     status: row.status,
     joinedAt: row.joined_at,
+    loginCount: Number(row.login_count || 0),
   };
 }
 
@@ -81,9 +82,15 @@ export async function initDatabase() {
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'member',
       status TEXT NOT NULL DEFAULT 'active',
-      joined_at TEXT NOT NULL
+      joined_at TEXT NOT NULL,
+      login_count INTEGER NOT NULL DEFAULT 1
     )
   `);
+  try {
+    db.run("ALTER TABLE members ADD COLUMN login_count INTEGER NOT NULL DEFAULT 1");
+  } catch {
+    // column already exists
+  }
   db.run(`
     CREATE TABLE IF NOT EXISTS sessions (
       token TEXT PRIMARY KEY,
@@ -119,12 +126,18 @@ export function insertMember({ email, name, passwordHash, role = "member" }) {
     role,
     status: "active",
     joined_at: new Date().toISOString(),
+    login_count: 1,
   };
   run(`
-    INSERT INTO members (id, email, name, password_hash, role, status, joined_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `, [record.id, record.email, record.name, record.password_hash, record.role, record.status, record.joined_at]);
+    INSERT INTO members (id, email, name, password_hash, role, status, joined_at, login_count)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `, [record.id, record.email, record.name, record.password_hash, record.role, record.status, record.joined_at, record.login_count]);
   return rowToMember(record);
+}
+
+export function incrementMemberLoginCount(id) {
+  run("UPDATE members SET login_count = COALESCE(login_count, 0) + 1 WHERE id = ?", [id]);
+  return rowToMember(getMemberById(id));
 }
 
 export function updateMemberFields(id, fields) {
@@ -162,7 +175,7 @@ export function createSession(memberId, ttlDays = 30) {
 export function getSession(token) {
   if (!token) return null;
   const row = getOne(`
-    SELECT s.token, s.member_id, s.expires_at, m.id, m.email, m.name, m.password_hash, m.role, m.status, m.joined_at
+    SELECT s.token, s.member_id, s.expires_at, m.id, m.email, m.name, m.password_hash, m.role, m.status, m.joined_at, m.login_count
     FROM sessions s
     JOIN members m ON m.id = s.member_id
     WHERE s.token = ?

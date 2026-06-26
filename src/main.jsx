@@ -318,18 +318,8 @@ function memberToSession(record) {
     email: record.email,
     joinedAt: record.joinedAt,
     role: record.role,
+    loginCount: record.loginCount,
   };
-}
-
-function countMemberVisit(email) {
-  const key = `auctionVisitCount:${normalizeMemberEmail(email)}`;
-  try {
-    const next = Number(localStorage.getItem(key) || "0") + 1;
-    localStorage.setItem(key, String(next));
-    return next;
-  } catch {
-    return 1;
-  }
 }
 
 function isPrimaryAdminEmail(email) {
@@ -4952,7 +4942,7 @@ function App() {
       setAuthForm({ name: "", email: "", password: "" });
       pushAppHistory(record.role === "admin" ? "admin" : "mypage");
       setView(record.role === "admin" ? "admin" : "mypage");
-      const visitCount = countMemberVisit(record.email);
+      const visitCount = Number(record.loginCount || 1);
       showToast(`${record.name}님 안녕하세요. 가입 후 ${visitCount}번째 방문이시군요.`);
     } catch (err) {
       setAuthError(err?.message || "로그인에 실패했습니다.");

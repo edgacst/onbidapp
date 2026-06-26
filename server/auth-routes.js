@@ -7,6 +7,7 @@ import {
   getMemberByEmail,
   getMemberById,
   getSession,
+  incrementMemberLoginCount,
   insertMember,
   listMembers,
   normalizeEmail,
@@ -52,6 +53,7 @@ function publicMember(member) {
     role: member.role,
     status: member.status,
     joinedAt: member.joinedAt,
+    loginCount: member.loginCount,
   };
 }
 
@@ -153,13 +155,14 @@ router.post("/login", async (req, res) => {
     return;
   }
 
-  const member = {
+  let member = {
     id: row.id,
     email: row.email,
     name: row.name,
     role: row.role,
     status: row.status,
     joinedAt: row.joined_at,
+    loginCount: Number(row.login_count || 0),
   };
 
   if (member.status === "blocked") {
@@ -167,6 +170,7 @@ router.post("/login", async (req, res) => {
     return;
   }
 
+  member = incrementMemberLoginCount(member.id) || member;
   const token = createSession(member.id, SESSION_TTL_DAYS);
   res.json(authPayload(member, token));
 });
