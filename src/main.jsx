@@ -4685,12 +4685,14 @@ function App() {
 
   function submitSearch(event) {
     event.preventDefault();
+    if (!ensureSearchAllowed()) return;
     const filters = { keyword, propertyType, bidType, privateContract, region, pageNo: 1, numOfRows: PAGE_SIZE, statusCode: statusCodeForFocus(statusFocus), dspsMethod, usageCategoryId, assetType: homeAssetType };
     setPageNo(1);
     loadLots(filters);
   }
 
   function movePage(nextPage) {
+    if (!ensureSearchAllowed()) return;
     const safePage = Math.max(1, nextPage);
     setPageNo(safePage);
     loadLots({ keyword, propertyType, bidType, privateContract, region, pageNo: safePage, numOfRows: PAGE_SIZE, statusCode: statusCodeForFocus(statusFocus), dspsMethod, usageCategoryId, assetType: homeAssetType });
@@ -4700,7 +4702,16 @@ function App() {
     setSaved((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
 
+  function ensureSearchAllowed() {
+    if (member) return true;
+    showToast("로그인 후 무료 사용할 수 있습니다.", "error");
+    pushAppHistory("login");
+    setView("login");
+    return false;
+  }
+
   function openAssetTypeSearch(nextType) {
+    if (!ensureSearchAllowed()) return;
     setStatusFocus("");
     setCheckMode(false);
     setPageNo(1);
@@ -4806,6 +4817,7 @@ function App() {
   }
 
   function openStatus(tileValue) {
+    if (!ensureSearchAllowed()) return;
     setCheckMode(false);
     setStatusFocus(tileValue);
     setPageNo(1);
@@ -4830,6 +4842,7 @@ function App() {
   }
 
   async function runQuickSearch(rawKeyword = quickKeyword) {
+    if (!ensureSearchAllowed()) return;
     setStatusFocus("");
     setCheckMode(false);
     setPageNo(1);
@@ -5265,7 +5278,7 @@ function App() {
                 <button className="user-chip signup-action" onClick={() => openView("signup")}><UserPlus size={16} /> 회원가입</button>
               </>
             )}
-            <button className="icon-button" aria-label="새로고침" onClick={() => loadLots()}>
+            <button className="icon-button" aria-label="새로고침" onClick={() => { if (ensureSearchAllowed()) loadLots(); }}>
               {loading ? <Loader2 className="spin" size={20} /> : <RefreshCw size={20} />}
             </button>
           </div>
