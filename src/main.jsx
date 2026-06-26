@@ -321,6 +321,17 @@ function memberToSession(record) {
   };
 }
 
+function countMemberVisit(email) {
+  const key = `auctionVisitCount:${normalizeMemberEmail(email)}`;
+  try {
+    const next = Number(localStorage.getItem(key) || "0") + 1;
+    localStorage.setItem(key, String(next));
+    return next;
+  } catch {
+    return 1;
+  }
+}
+
 function isPrimaryAdminEmail(email) {
   return normalizeMemberEmail(email) === normalizeMemberEmail(PRIMARY_ADMIN_EMAIL);
 }
@@ -4925,7 +4936,8 @@ function App() {
       setAuthForm({ name: "", email: "", password: "" });
       pushAppHistory(record.role === "admin" ? "admin" : "mypage");
       setView(record.role === "admin" ? "admin" : "mypage");
-      showToast(`${record.name}님, 로그인되었습니다.`);
+      const visitCount = countMemberVisit(record.email);
+      showToast(`${record.name}님 안녕하세요. 가입 후 ${visitCount}번째 방문이시군요.`);
     } catch (err) {
       setAuthError(err?.message || "로그인에 실패했습니다.");
     }
