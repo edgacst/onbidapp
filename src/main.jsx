@@ -5691,7 +5691,7 @@ function App() {
           </section>
         ) : view === "privacy" ? (
           <section className="legal-page">
-            <section className="service-card legal-card">
+            <section className="legal-card">
               <h2>개인정보처리방침</h2>
               <p className="legal-updated">시행일: 2026.06.26</p>
               <p>주식회사 에드가씨에스티는 에드가공매 서비스 제공을 위하여 필요한 범위에서 개인정보를 처리하며, 개인정보 보호 관련 법령에 따라 이용자의 개인정보를 안전하게 관리합니다.</p>
@@ -5715,7 +5715,7 @@ function App() {
           </section>
         ) : view === "terms" ? (
           <section className="legal-page">
-            <section className="service-card legal-card">
+            <section className="legal-card">
               <h2>이용약관</h2>
               <p className="legal-updated">시행일: 2026.06.26</p>
               <h3>1. 목적</h3>
