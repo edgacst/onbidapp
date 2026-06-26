@@ -267,7 +267,7 @@ function parseRegionFromKeyword(keyword) {
   };
 }
 
-const appViews = ["home", "search", "watch", "map", "board", "notice", "admin", "login", "signup", "mypage", "detail"];
+const appViews = ["home", "search", "watch", "map", "board", "notice", "privacy", "terms", "admin", "login", "signup", "mypage", "detail"];
 
 const defaultNotices = [
   {
@@ -5243,6 +5243,8 @@ function App() {
               {view === "map" && "지도 검색"}
               {view === "board" && "질문게시판"}
               {view === "notice" && "공지사항"}
+              {view === "privacy" && "개인정보처리방침"}
+              {view === "terms" && "이용약관"}
               {view === "admin" && "관리자 대시보드"}
               {view === "login" && "로그인"}
               {view === "signup" && "회원가입"}
@@ -5256,6 +5258,8 @@ function App() {
               {view === "map" && "선택한 물건의 위치와 외부 지도 링크를 중심으로 확인합니다."}
               {view === "board" && "공매 물건 검토 질문과 답변을 남깁니다."}
               {view === "notice" && "서비스 안내와 변경사항을 확인합니다."}
+              {view === "privacy" && "에드가공매의 개인정보 처리 기준을 확인합니다."}
+              {view === "terms" && "에드가공매 서비스 이용 조건을 확인합니다."}
               {view === "admin" && "공지와 질문 현황을 관리합니다."}
               {view === "login" && "내 관심 물건과 질문 이력을 이어서 관리합니다."}
               {view === "signup" && "에드가공매 회원 정보를 만듭니다."}
@@ -5684,6 +5688,53 @@ function App() {
                 </section>
               </div>
             )}
+          </section>
+        ) : view === "privacy" ? (
+          <section className="legal-page">
+            <section className="service-card legal-card">
+              <h2>개인정보처리방침</h2>
+              <p className="legal-updated">시행일: 2026.06.26</p>
+              <p>주식회사 에드가씨에스티는 에드가공매 서비스 제공을 위하여 필요한 범위에서 개인정보를 처리하며, 개인정보 보호 관련 법령에 따라 이용자의 개인정보를 안전하게 관리합니다.</p>
+              <h3>1. 처리하는 개인정보 항목</h3>
+              <p>회원가입 및 로그인 시 이메일, 이름, 비밀번호를 처리합니다. 비밀번호는 암호화하여 저장합니다. 서비스 이용 과정에서 관심 물건, 질문게시판 작성 내용, 접속 기록 등 서비스 이용 정보가 생성될 수 있습니다.</p>
+              <h3>2. 개인정보의 처리 목적</h3>
+              <p>회원 식별, 로그인 세션 유지, 관심 물건 및 질문 이력 관리, 공지 및 고객지원, 서비스 안정성 확보, 부정 이용 방지를 위해 개인정보를 처리합니다.</p>
+              <h3>3. 보유 및 이용 기간</h3>
+              <p>회원 정보는 회원 탈퇴 또는 삭제 요청 시까지 보관합니다. 관계 법령에 따라 보존이 필요한 정보는 해당 법령에서 정한 기간 동안 보관할 수 있습니다.</p>
+              <h3>4. 제3자 제공 및 처리위탁</h3>
+              <p>회사는 이용자의 개인정보를 법령에 근거가 있거나 이용자의 동의가 있는 경우를 제외하고 제3자에게 제공하지 않습니다. 환영 메일 등 이메일 발송을 위해 SMTP 메일 서비스를 사용할 수 있습니다.</p>
+              <h3>5. 개인정보의 파기</h3>
+              <p>보유 기간이 경과하거나 처리 목적이 달성된 개인정보는 복구가 어려운 방법으로 지체 없이 파기합니다.</p>
+              <h3>6. 이용자의 권리</h3>
+              <p>이용자는 개인정보 열람, 정정, 삭제, 처리정지를 요청할 수 있습니다. 요청은 사이트 문의 또는 회사 연락처를 통해 접수할 수 있습니다.</p>
+              <h3>7. 안전성 확보조치</h3>
+              <p>회사는 비밀번호 암호화, 접근 권한 관리, 서버 접근 통제, 로그 점검 등 개인정보 보호를 위한 관리적·기술적 조치를 적용합니다.</p>
+              <h3>8. 개인정보 보호책임자</h3>
+              <p>개인정보 관련 문의는 주식회사 에드가씨에스티 고객지원으로 연락해 주세요.</p>
+            </section>
+          </section>
+        ) : view === "terms" ? (
+          <section className="legal-page">
+            <section className="service-card legal-card">
+              <h2>이용약관</h2>
+              <p className="legal-updated">시행일: 2026.06.26</p>
+              <h3>1. 목적</h3>
+              <p>본 약관은 주식회사 에드가씨에스티가 제공하는 에드가공매 서비스의 이용 조건과 절차, 회사와 이용자의 권리·의무를 정하는 것을 목적으로 합니다.</p>
+              <h3>2. 서비스 내용</h3>
+              <p>에드가공매는 온비드 및 공공데이터 기반 공매 물건 조회, 관심 물건 저장, 질문게시판, 지도 및 원문 링크 연결 기능을 제공합니다.</p>
+              <h3>3. 회원가입 및 계정 관리</h3>
+              <p>이용자는 정확한 정보를 입력하여 회원가입해야 하며, 계정과 비밀번호 관리 책임은 이용자에게 있습니다. 타인의 계정을 도용하거나 허위 정보를 입력해서는 안 됩니다.</p>
+              <h3>4. 정보의 성격 및 책임</h3>
+              <p>본 서비스의 공매 정보는 공공데이터 및 온비드 원문을 기반으로 제공됩니다. 입찰, 낙찰, 권리관계, 물건 상태 등 최종 판단은 반드시 온비드 원문, 공고문, 공부서류, 현장 확인을 통해 이용자 책임으로 진행해야 합니다.</p>
+              <h3>5. 금지행위</h3>
+              <p>서비스의 정상 운영을 방해하는 행위, 무단 크롤링, 타인의 개인정보 침해, 허위 게시물 작성, 법령 또는 공서양속에 반하는 행위를 금지합니다.</p>
+              <h3>6. 서비스 변경 및 중단</h3>
+              <p>회사는 공공데이터 API 상태, 시스템 점검, 장애, 운영상 필요에 따라 서비스의 일부 또는 전부를 변경하거나 일시 중단할 수 있습니다.</p>
+              <h3>7. 면책</h3>
+              <p>회사는 공공데이터, 온비드, 외부 지도, 통신망 장애 등 회사의 합리적 통제 범위를 벗어난 사유로 발생한 손해에 대해 책임을 지지 않습니다. 이용자는 입찰 전 원문 정보를 반드시 확인해야 합니다.</p>
+              <h3>8. 준거법</h3>
+              <p>본 약관은 대한민국 법령에 따르며, 분쟁이 발생하는 경우 관련 법령에서 정한 관할 법원을 따릅니다.</p>
+            </section>
           </section>
         ) : view === "admin" ? (
           <section className="board-page admin-page">
@@ -6197,6 +6248,19 @@ function App() {
           </>
         )}
       </section>
+
+      <footer className="site-footer">
+        <div className="footer-company">
+          <strong>주식회사 에드가씨에스티</strong>
+          <span>사업자번호 : 634-81-02760</span>
+          <span>대표이사 김기철</span>
+          <span>경기도 부천시 상동457 제 2026-부천원미-0446 호</span>
+        </div>
+        <nav className="footer-links" aria-label="서비스 정책">
+          <button type="button" onClick={() => openView("privacy")}>개인정보처리방침</button>
+          <button type="button" onClick={() => openView("terms")}>이용약관</button>
+        </nav>
+      </footer>
 
       {loading && view !== "detail" && (
         <div className="search-loading-overlay" role="alert" aria-live="assertive" aria-busy="true">
