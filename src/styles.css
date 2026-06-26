@@ -61,6 +61,7 @@ a {
 }
 
 .site-footer {
+  grid-column: 2 / -1;
   width: min(100%, 1440px);
   margin: 34px auto 0;
   padding: 22px 0 26px;
@@ -4681,6 +4682,7 @@ a {
   }
 
   .site-footer {
+    grid-column: 1 / -1;
     margin-top: 24px;
     padding: 18px 0 20px;
     flex-direction: column;
