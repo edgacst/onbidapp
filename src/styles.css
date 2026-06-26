@@ -40,6 +40,26 @@ a {
     linear-gradient(180deg, #f9fafb 0%, #eef2f5 100%);
 }
 
+.page-top-button {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 80;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(21, 27, 35, 0.12);
+  border-radius: 50%;
+  background: #ffffff;
+  color: #1f5f99;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 12px 28px rgba(31, 95, 153, 0.18);
+}
+
+.page-top-button:hover {
+  background: #eef7ff;
+}
+
 .sidebar {
   position: sticky;
   top: 0;
@@ -4566,6 +4586,13 @@ a {
 @media (max-width: 760px) {
   .app-shell {
     padding-bottom: calc(74px + env(safe-area-inset-bottom));
+  }
+
+  .page-top-button {
+    right: 14px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    width: 42px;
+    height: 42px;
   }
 
   .content-grid .detail-panel {

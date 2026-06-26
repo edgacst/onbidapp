@@ -20,6 +20,7 @@ import {
   ChevronRight,
   ChevronLeft,
   ChevronDown,
+  ChevronUp,
   Clock3,
   Download,
   ExternalLink,
@@ -6194,6 +6195,15 @@ function App() {
           <span>{toast.message}</span>
         </div>
       )}
+
+      <button
+        className="page-top-button"
+        type="button"
+        aria-label="맨 위로"
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      >
+        <ChevronUp size={22} />
+      </button>
     </main>
   );
 }
