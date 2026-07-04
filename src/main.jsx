@@ -5174,7 +5174,10 @@ function App() {
           createdAt: new Date().toLocaleDateString("ko-KR"),
         },
       ];
-      return { ...question, comments };
+      const nextStatus = isAdminMember(member) && question.status === "답변대기"
+        ? "답변완료"
+        : question.status;
+      return { ...question, comments, status: nextStatus };
     }));
     cancelCommentReply();
   }
