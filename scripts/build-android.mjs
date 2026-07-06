@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,16 +9,28 @@ const shell = process.platform === "win32";
 
 console.log(`Building Android bundle (API: ${apiOrigin})...`);
 
-execFileSync("npm", ["run", "build:inner"], {
-  cwd: root,
-  stdio: "inherit",
-  env: {
-    ...process.env,
-    VITE_API_ORIGIN: apiOrigin,
-    VITE_APP_BUILD: buildId,
-  },
-  shell,
-});
+if (shell) {
+  execFileSync("node", ["scripts/build.mjs"], {
+    cwd: root,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      VITE_API_ORIGIN: apiOrigin,
+      VITE_APP_BUILD: buildId,
+    },
+  });
+} else {
+  execFileSync("npm", ["run", "build:inner"], {
+    cwd: root,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      VITE_API_ORIGIN: apiOrigin,
+      VITE_APP_BUILD: buildId,
+    },
+    shell,
+  });
+}
 
 execFileSync("npx", ["cap", "sync", "android"], {
   cwd: root,
@@ -27,4 +39,4 @@ execFileSync("npx", ["cap", "sync", "android"], {
 });
 
 console.log(`✅ Android sync complete (${buildId})`);
-console.log("다음: npm run android:open → Android Studio에서 Build > Generate Signed Bundle");
+console.log("다음: npm run build:aab 또는 Android Studio에서 Build > Generate Signed Bundle");

@@ -14,6 +14,7 @@
     "build:prod": "node scripts/build-prod.mjs",
     "build:phone": "node scripts/build-phone.mjs",
     "build:android": "node scripts/build-android.mjs",
+    "build:aab": "node scripts/build-aab.mjs",
     "android:open": "npx cap open android",
     "android:sync": "npx cap sync android",
     "build:inner": "vite build",
