@@ -49,9 +49,10 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
+import { resolveApiUrl } from "./api-origin.js";
 import "./styles.css";
 
-const API_BASE = "/onbid-api";
+const API_BASE = resolveApiUrl("/onbid-api");
 const ONBID_LIST_PATH = "/B010003/OnbidRlstListSrvc2/getRlstCltrList2";
 const ONBID_DETAIL_PATH = "/B010003/OnbidRlstDtlSrvc2/getRlstDtlInf2";
 const ONBID_CAR_LIST_PATH = "/B010003/OnbidCarListSrvc2/getCarCltrList2";
@@ -328,7 +329,7 @@ function isPrimaryAdminEmail(email) {
 
 async function sendSignupWelcomeEmail(record) {
   try {
-    const response = await fetch("/api/members/welcome", {
+    const response = await fetch(resolveApiUrl("/api/members/welcome"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: record.email, name: record.name }),
@@ -1076,7 +1077,7 @@ function extractOnbidDetailFormParams(html) {
   return Object.keys(params).length ? params : null;
 }
 
-const ONBID_AJAX_BASE = "/onbid-file/op/cltrpbancinf/cltrdtl/CltrDtlController";
+const ONBID_AJAX_BASE = resolveApiUrl("/onbid-file/op/cltrpbancinf/cltrdtl/CltrDtlController");
 
 async function postOnbidAjax(endpoint, params) {
   const body = new URLSearchParams({
@@ -1597,15 +1598,15 @@ function toOnbidFileProxy(url) {
   if (!url || typeof url !== "string") return "";
   const trimmed = url.trim();
   if (!trimmed) return "";
-  if (trimmed.startsWith("/onbid-file")) return trimmed;
+  if (trimmed.startsWith("/onbid-file")) return resolveApiUrl(trimmed);
 
   try {
     const parsed = new URL(trimmed, "https://www.onbid.co.kr");
     if (parsed.hostname.endsWith("onbid.co.kr")) {
-      return `/onbid-file${parsed.pathname}${parsed.search}`;
+      return resolveApiUrl(`/onbid-file${parsed.pathname}${parsed.search}`);
     }
   } catch {
-    if (trimmed.startsWith("/")) return `/onbid-file${trimmed}`;
+    if (trimmed.startsWith("/")) return resolveApiUrl(`/onbid-file${trimmed}`);
   }
 
   return trimmed;

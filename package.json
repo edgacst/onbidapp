@@ -13,6 +13,9 @@
     "build": "node scripts/build.mjs",
     "build:prod": "node scripts/build-prod.mjs",
     "build:phone": "node scripts/build-phone.mjs",
+    "build:android": "node scripts/build-android.mjs",
+    "android:open": "npx cap open android",
+    "android:sync": "npx cap sync android",
     "build:inner": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "start": "node scripts/start-server.mjs",
@@ -28,6 +31,8 @@
     "start:phone": "node scripts/build.mjs && node scripts/phone-launch.mjs --port 3000 --server prod --keep-alive"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.2",
+    "@capacitor/core": "^7.4.2",
     "@vitejs/plugin-react": "5.1.1",
     "bcryptjs": "^3.0.2",
     "express": "^4.22.2",
@@ -40,6 +45,7 @@
     "vite": "7.3.5"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.4.2",
     "sharp": "^0.35.2"
   }
 }

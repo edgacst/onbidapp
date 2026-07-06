@@ -1,0 +1,11 @@
+{
+  "appId": "com.edgauction.app",
+  "appName": "에드가공매",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

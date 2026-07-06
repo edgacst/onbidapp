@@ -1,3 +1,5 @@
+import { resolveApiUrl } from "./api-origin.js";
+
 const AUTH_TOKEN_KEY = "auctionAuthToken";
 
 export function getAuthToken() {
@@ -25,7 +27,7 @@ async function authRequest(path, options = {}) {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(path, {
+  const response = await fetch(resolveApiUrl(path), {
     ...options,
     headers,
     signal: options.signal || AbortSignal.timeout(15000),

@@ -1,4 +1,11 @@
-node_modules/
+# Android (Capacitor)
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/
+*.jks
+*.keystore
 dist/
 logs/
 data/
