@@ -3801,6 +3801,20 @@ function getQuestionComments(question) {
   return Array.isArray(question?.comments) ? question.comments : [];
 }
 
+function isAdminQuestionComment(comment) {
+  const author = String(comment?.author || "");
+  return ["관리자", "공매도우미", "에드가공매", "freecompr20"].some((name) => author.includes(name));
+}
+
+function getQuestionStatus(question) {
+  if (question?.status === "답변완료") return "답변완료";
+  return getQuestionComments(question).some(isAdminQuestionComment) ? "답변완료" : "답변대기";
+}
+
+function withQuestionStatus(question) {
+  return { ...question, status: getQuestionStatus(question) };
+}
+
 function getCommentsByParent(comments, parentId = null) {
   return comments
     .filter((comment) => (comment.parentId || null) === parentId)
@@ -4099,7 +4113,7 @@ function App() {
     const query = boardSearch.trim().toLowerCase();
     return questions
       .filter((question) => {
-      const statusOk = boardStatus === "all" || question.status === boardStatus;
+      const statusOk = boardStatus === "all" || getQuestionStatus(question) === boardStatus;
       const queryOk = !query || [question.title, question.body, question.category, question.author].some((value) => String(value || "").toLowerCase().includes(query));
       return statusOk && queryOk;
     })
@@ -4409,7 +4423,7 @@ function App() {
   }, [saved]);
 
   useEffect(() => {
-    localStorage.setItem("auctionQuestions", JSON.stringify(questions));
+    localStorage.setItem("auctionQuestions", JSON.stringify(questions.map(withQuestionStatus)));
   }, [questions]);
 
   useEffect(() => {
@@ -5151,9 +5165,11 @@ function App() {
 
     setQuestions((current) => current.map((item) => {
       if (item.id !== questionId) return item;
+      const comments = getQuestionComments(item).filter((comment) => !removeIds.has(comment.id));
       return {
         ...item,
-        comments: getQuestionComments(item).filter((comment) => !removeIds.has(comment.id)),
+        comments,
+        status: comments.some(isAdminQuestionComment) ? "답변완료" : "답변대기",
       };
     }));
   }
@@ -5175,9 +5191,9 @@ function App() {
           createdAt: new Date().toLocaleDateString("ko-KR"),
         },
       ];
-      const nextStatus = isAdminMember(member) && question.status === "답변대기"
+      const nextStatus = isAdminMember(member) && getQuestionStatus(question) === "답변대기"
         ? "답변완료"
-        : question.status;
+        : getQuestionStatus(question);
       return { ...question, comments, status: nextStatus };
     }));
     cancelCommentReply();
@@ -5451,7 +5467,7 @@ function App() {
               </article>
               <article className="board-summary-card">
                 <span className="board-summary-label">답변완료</span>
-                <strong>{questions.filter((question) => question.status === "답변완료").length}건</strong>
+                <strong>{questions.filter((question) => getQuestionStatus(question) === "답변완료").length}건</strong>
                 <p>실제 검토 흐름에 참고할 수 있는 답변이 정리되어 있습니다.</p>
               </article>
               <article className="board-summary-card board-summary-tip">
@@ -5481,8 +5497,8 @@ function App() {
               <div className="board-tabs" aria-label="질문 상태">
                 {[
                   ["all", "전체", questions.length],
-                  ["답변대기", "답변대기", questions.filter((question) => question.status === "답변대기").length],
-                  ["답변완료", "답변완료", questions.filter((question) => question.status === "답변완료").length],
+                  ["답변대기", "답변대기", questions.filter((question) => getQuestionStatus(question) === "답변대기").length],
+                  ["답변완료", "답변완료", questions.filter((question) => getQuestionStatus(question) === "답변완료").length],
                 ].map(([value, label, count]) => (
                   <button key={value} className={boardStatus === value ? "active" : ""} onClick={() => setBoardStatus(value)} type="button">
                     {label}<span>{count}</span>
@@ -5514,7 +5530,7 @@ function App() {
                       </button>
                       <div className="board-row-aside">
                         <span className="board-author">{question.author}</span>
-                        <span className={`board-status ${question.status === "답변완료" ? "done" : ""}`}>{question.status}</span>
+                        <span className={`board-status ${getQuestionStatus(question) === "답변완료" ? "done" : ""}`}>{getQuestionStatus(question)}</span>
                       </div>
                     </div>
                     {isOpen && (
@@ -5766,7 +5782,7 @@ function App() {
                   <article className="board-summary-card">
                     <span className="board-summary-label">질문게시판</span>
                     <strong>{questions.length}건</strong>
-                    <p>답변대기 {questions.filter((question) => question.status === "답변대기").length}건</p>
+                    <p>답변대기 {questions.filter((question) => getQuestionStatus(question) === "답변대기").length}건</p>
                   </article>
                   <article className="board-summary-card board-summary-tip">
                     <span className="board-summary-label">관심 물건</span>
@@ -5883,7 +5899,7 @@ function App() {
                     <div className="question-list">
                       {questions.slice(0, 5).map((question) => (
                         <article key={question.id}>
-                          <span>{question.status}</span>
+                          <span>{getQuestionStatus(question)}</span>
                           <strong>{question.title || question.body}</strong>
                           <small>{question.author} · {question.createdAt}</small>
                         </article>
@@ -5963,7 +5979,7 @@ function App() {
                     onClick={() => openBoardQuestion(question.id)}
                   >
                     <div className="mypage-activity-main">
-                      <span>{question.status}</span>
+                      <span>{getQuestionStatus(question)}</span>
                       <strong>{question.title || question.body}</strong>
                       <small>{question.category || "일반"} · {question.createdAt}</small>
                     </div>
