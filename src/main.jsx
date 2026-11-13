@@ -61,6 +61,7 @@ const ONBID_MOVABLE_LIST_PATH = "/B010003/OnbidMvastListSrvc2/getMvastCltrList2"
 const ONBID_MOVABLE_DETAIL_PATH = "/B010003/OnbidMvastDtlSrvc2/getMvastDtlInf2";
 const ONBID_RESULT_LIST_PATH = "/B010003/OnbidCltrBidRsltListSrvc2/getCltrBidRsltList2";
 const ONBID_RESULT_DETAIL_PATH = "/B010003/OnbidCltrBidRsltDtlSrvc2/getCltrBidRsltDtl2";
+const COURT_AUCTION_URL = "https://edgar-court-auction.freecompr20.chatgpt.site/";
 const PAGE_SIZE = 30;
 const APP_BUILD = typeof __APP_BUILD__ !== "undefined" ? __APP_BUILD__ : "dev";
 const APP_BUILD_STORAGE_KEY = "auctionAppBuild";
@@ -5287,6 +5288,9 @@ function App() {
             </p>
           </div>
           <div className="top-actions">
+            <a className="court-auction-entry" href={COURT_AUCTION_URL}>
+              <Gavel size={16} /> 법원경매 <ExternalLink size={13} aria-hidden="true" />
+            </a>
             {member ? (
               <button className="user-chip" onClick={() => openView("mypage")}><User size={16} /> {member.name}</button>
             ) : (

@@ -263,6 +263,28 @@ a {
   gap: 8px;
 }
 
+.court-auction-entry {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid #bfd2e1;
+  border-radius: 9px;
+  color: #174d75;
+  background: #edf6fc;
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.court-auction-entry:hover {
+  border-color: #174d75;
+  background: #e1f0fa;
+}
+
 .plain-action,
 .user-chip {
   min-height: 42px;
@@ -4821,6 +4843,16 @@ a {
   }
 
   .top-actions .signup-action {
+    display: none;
+  }
+
+  .court-auction-entry {
+    min-height: 38px;
+    padding-inline: 10px;
+    font-size: 11px;
+  }
+
+  .court-auction-entry svg:last-child {
     display: none;
   }
 

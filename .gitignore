@@ -9,6 +9,7 @@ android/.idea/
 *.jks
 *.keystore
 dist/
+node_modules/
 logs/
 data/
 .env.local
